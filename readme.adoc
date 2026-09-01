@@ -10,4 +10,4 @@ dd if=/dev/zero of=blockdev bs=1024 count=1024
 Create a virtual block loop device backed by the file:
 
 [listing]
-losetup --show blockdev
+losetup --find --show blockdev
