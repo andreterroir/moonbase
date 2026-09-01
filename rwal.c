@@ -34,6 +34,9 @@ int main(int argc, char *argv[])
 	}
 	printf("physical block size for %s is %d\n", devPath, pblockSize);
 
+	// assert that the buffer is aligned to the block size
+	// verify that misalignment of buffer results in an error
+
 	int bytesRead = read(fd, buf, BUF_SIZE);
 	printf("read %d bytes from %s successfully\n", bytesRead, devPath);
 	if (bytesRead == -1)
