@@ -11,7 +11,9 @@
 
 int main(int argc, char *argv[])
 {
-	char buf[BUF_SIZE];
+	// Enforce stricter buffer alignment than most physical block sizes, most
+	// often 512.
+	char buf[BUF_SIZE] __attribute__((aligned (4096)));
 
 	if (argc != 2) {
 		fprintf(stderr, "usage: %s [blockdev]\n", argv[0]);
@@ -34,16 +36,21 @@ int main(int argc, char *argv[])
 	}
 	printf("physical block size for %s is %d\n", devPath, pblockSize);
 
-	// assert that the buffer is aligned to the block size
-	// verify that misalignment of buffer results in an error
+	intptr_t bufptr_int = (intptr_t) buf;
+	printf("buffer address: 0x%lx\n", bufptr_int);
+	// Verify O_DIRECT requirements:
+	// buffer size must be mutliple of block size
+	assert(BUF_SIZE % pblockSize == 0);
+	// buffer must be aligned at the block size
+	assert((bufptr_int & (pblockSize - 1)) == 0);
 
 	int bytesRead = read(fd, buf, BUF_SIZE);
-	printf("read %d bytes from %s successfully\n", bytesRead, devPath);
 	if (bytesRead == -1)
 	{
-		perror("open failed");
+		perror("read failed");
 		exit(1);
 	}
+	printf("read %d bytes from %s successfully\n", bytesRead, devPath);
 
 	for (int i = 0; i < bytesRead; ++i)
 		assert(buf[i] == 0);
