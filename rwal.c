@@ -9,7 +9,17 @@
 #include <unistd.h> // read
 
 #define BUF_SIZE 4096
-#define MAGIC "RWAL" // trailing \0 is not written
+#define MAGIC_SIZE 4
+#define HEADER_SIZE 21
+static const char header[HEADER_SIZE] = {
+	// 0x52, 0x57, 0x41, 0x4C
+	'R', 'W', 'A', 'L', // magic
+	0x0, // version byte
+	// 8 byte offsets support up to 16EB large log device.
+	// The offsets are relative to the start of the firs block.
+	0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // start offset
+	0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // end offset
+};
 
 int main(int argc, char *argv[])
 {
@@ -57,21 +67,12 @@ int main(int argc, char *argv[])
 	assert(bytesRead == BUF_SIZE);
 	printf("read %ld bytes from %s successfully\n", bytesRead, devPath);
 
-	ssize_t magicBytes = strlen(MAGIC);
-	printf("read magic: '%c%c%c%c'\n", buf[0], buf[1], buf[2], buf[3]);
-	if (strncmp(MAGIC, buf, magicBytes) != 0) {
+	printf("read magic: '%4s'\n", buf);
+	if (strncmp(header, buf, MAGIC_SIZE) != 0) {
 		printf("magic mismatch, preparing a new log device\n");
 
 		memset(buf, 0, BUF_SIZE); // reset the buffer
-		memcpy(buf, MAGIC, magicBytes);
-		char *header[17] = {
-			0x0, // version byte
-			// 8 byte offsets support up to 16EB large log device.
-			// The offsets are relative to the start of the firs block.
-			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // start offset
-			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // end offset
-		};
-		memcpy(buf + magicBytes, header, 17);
+		memcpy(buf, header, HEADER_SIZE);
 
 		// seek back to the beginning
 		if (lseek(fd, 0, SEEK_SET) == -1) {
