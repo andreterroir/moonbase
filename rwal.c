@@ -1,13 +1,15 @@
 #define _GNU_SOURCE // O_DIRECT - has to be defined before includes
 #include <assert.h>
-#include <linux/fs.h> // BLKPBSZGET
 #include <fcntl.h> // open
+#include <linux/fs.h> // BLKPBSZGET
 #include <stdio.h>
 #include <stdlib.h> // exit
+#include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h> // read
 
-#define BUF_SIZE 1024
+#define BUF_SIZE 4096
+#define MAGIC "RWAL" // trailing \0 is not written
 
 int main(int argc, char *argv[])
 {
@@ -21,7 +23,7 @@ int main(int argc, char *argv[])
 	}
 	const char *devPath = argv[1];
 
-	int fd = open(devPath, O_RDONLY | O_DIRECT);
+	int fd = open(devPath, O_RDWR | O_DIRECT);
 	if (fd == -1)
 	{
 		perror("open failed");
@@ -44,14 +46,54 @@ int main(int argc, char *argv[])
 	// buffer must be aligned at the block size
 	assert((bufptr_int & (pblockSize - 1)) == 0);
 
-	int bytesRead = read(fd, buf, BUF_SIZE);
+	ssize_t bytesRead = read(fd, buf, BUF_SIZE);
 	if (bytesRead == -1)
 	{
 		perror("read failed");
 		exit(1);
 	}
-	printf("read %d bytes from %s successfully\n", bytesRead, devPath);
+	// This generally shouldn't happen, unless the block device is too small or
+	// the read was interrupted by a signal.
+	assert(bytesRead == BUF_SIZE);
+	printf("read %ld bytes from %s successfully\n", bytesRead, devPath);
 
-	for (int i = 0; i < bytesRead; ++i)
-		assert(buf[i] == 0);
+	ssize_t magicBytes = strlen(MAGIC);
+	printf("read magic: '%c%c%c%c'\n", buf[0], buf[1], buf[2], buf[3]);
+	if (strncmp(MAGIC, buf, magicBytes) != 0) {
+		printf("magic mismatch, preparing a new log device\n");
+
+		memset(buf, 0, BUF_SIZE); // reset the buffer
+		memcpy(buf, MAGIC, magicBytes);
+		char *header[17] = {
+			0x0, // version byte
+			// 8 byte offsets support up to 16EB large log device.
+			// The offsets are relative to the start of the firs block.
+			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // start offset
+			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // end offset
+		};
+		memcpy(buf + magicBytes, header, 17);
+
+		// seek back to the beginning
+		if (lseek(fd, 0, SEEK_SET) == -1) {
+			perror("seek failed");
+			exit(1);
+		}
+		ssize_t bytesWritten = write(fd, buf, BUF_SIZE);
+		if (bytesWritten == -1) {
+			perror("writing header failed");
+			exit(1);
+		}
+		assert(bytesWritten == BUF_SIZE);
+
+		if (fsync(fd) == 1) {
+			perror("fsyncing new header failed");
+			exit(1);
+		}
+		printf("written the log device header block\n");
+	}
+
+	if (close(fd) == 1) {
+		perror("an error on closing file");
+		exit(1);
+	}
 }
