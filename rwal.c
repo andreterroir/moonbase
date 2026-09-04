@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <fcntl.h> // open
 #include <linux/fs.h> // BLKPBSZGET
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h> // exit
 #include <string.h>
@@ -15,7 +16,7 @@ static const char header[HEADER_SIZE] = {
 	// 0x52, 0x57, 0x41, 0x4C
 	'R', 'W', 'A', 'L', // magic
 	0x0, // version byte
-	// 8 byte offsets support up to 16EB large log device.
+	// 8 byte LE offsets support up to 16EB large log device.
 	// The offsets are relative to the start of the firs block.
 	0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // start offset
 	0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // end offset
@@ -92,6 +93,22 @@ int main(int argc, char *argv[])
 		}
 		printf("written the log device header block\n");
 	}
+
+	// extract the version and the offsets
+	int boffset = MAGIC_SIZE;
+	int version = buf[boffset];
+	boffset += 1;
+
+	uint64_t soffset = 0; // start of the log
+	for (int i = 0; i < sizeof(soffset); i++) {
+		soffset += buf[boffset+i] << i * 8;
+	}
+	boffset += 8;
+	uint64_t eoffset = 0; // next record offset
+	for (int i = 0; i < sizeof(eoffset); i++) {
+		eoffset += buf[boffset+i] << i * 8;
+	}
+	printf("start offset: %lu, end offset: %lu\n", soffset, eoffset);
 
 	if (close(fd) == 1) {
 		perror("an error on closing file");
