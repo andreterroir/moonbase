@@ -110,6 +110,26 @@ int main(int argc, char *argv[])
 	}
 	printf("start offset: %lu, end offset: %lu\n", soffset, eoffset);
 
+	memset(buf, 0, BUF_SIZE); // reset the buffer
+	// TODO handle records spilling into following blocks
+	// append two records one by one
+	char record1[] = { 0xde, 0xad, 0xbe, 0xef };
+	printf("sizeof(record1): %ld\n", sizeof(record1));
+	memcpy(buf + eoffset % BUF_SIZE, record1, sizeof(record1));
+	eoffset += sizeof(record1);
+	char record2[] = { 0xca, 0xfe, 0xba, 0xbe };
+	memcpy(buf + eoffset % BUF_SIZE, record2, sizeof(record2));
+	eoffset += sizeof(record2);
+	ssize_t written = write(fd, buf, BUF_SIZE);
+	if (written == -1) {
+		perror("failed to write to device");
+		exit(1);
+	}
+	assert(written == BUF_SIZE);
+
+	// read the records back
+	// checkpoint - update header and flush
+
 	if (close(fd) == 1) {
 		perror("an error on closing file");
 		exit(1);
