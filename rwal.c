@@ -22,6 +22,8 @@ static const char header[HEADER_SIZE] = {
 	0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // end offset
 };
 
+void seekToBlock(int fd, off_t offset);
+
 int main(int argc, char *argv[])
 {
 	// Enforce stricter buffer alignment than most physical block sizes, most
@@ -110,28 +112,77 @@ int main(int argc, char *argv[])
 	}
 	printf("start offset: %lu, end offset: %lu\n", soffset, eoffset);
 
+	seekToBlock(fd, eoffset);
 	memset(buf, 0, BUF_SIZE); // reset the buffer
+	// read the current block
+	bytesRead = read(fd, buf, BUF_SIZE);
+	assert(bytesRead == BUF_SIZE);
+
 	// TODO handle records spilling into following blocks
 	// append two records one by one
 	char record1[] = { 0xde, 0xad, 0xbe, 0xef };
 	printf("sizeof(record1): %ld\n", sizeof(record1));
+	printf("record1 boffset: %ld\n", eoffset % BUF_SIZE);
 	memcpy(buf + eoffset % BUF_SIZE, record1, sizeof(record1));
 	eoffset += sizeof(record1);
 	char record2[] = { 0xca, 0xfe, 0xba, 0xbe };
 	memcpy(buf + eoffset % BUF_SIZE, record2, sizeof(record2));
 	eoffset += sizeof(record2);
-	ssize_t written = write(fd, buf, BUF_SIZE);
-	if (written == -1) {
+
+	// overwrite the current block
+	seekToBlock(fd, eoffset);
+	ssize_t bytesWritten = write(fd, buf, BUF_SIZE);
+	if (bytesWritten == -1) {
 		perror("failed to write to device");
 		exit(1);
 	}
-	assert(written == BUF_SIZE);
+	assert(bytesWritten == BUF_SIZE);
 
 	// read the records back
+	memset(buf, 0, BUF_SIZE);
+	seekToBlock(fd, eoffset);
+	bytesRead = read(fd, buf, BUF_SIZE);
+	assert(bytesRead == BUF_SIZE);
+	char rbuf[4];
+	memcpy(rbuf, buf, 4);
+	printf("record: %4s\n", rbuf);
+	memcpy(rbuf, buf + 4, 4);
+	printf("record: %4s\n", rbuf);
+
 	// checkpoint - update header and flush
+	// seek to the header
+	if (lseek(fd, 0, SEEK_SET) == -1) {
+		perror("seek failed");
+		exit(1);
+	}
+	memset(buf, 0, BUF_SIZE);
+	bytesRead = read(fd, buf, BUF_SIZE);
+	assert(bytesRead == BUF_SIZE);
+	boffset = MAGIC_SIZE + 1 + sizeof(soffset);
+	for (int i = 0; i < sizeof(eoffset); i++) {
+		buf[boffset++] = eoffset & 0xff;
+		eoffset >>= 8;
+	}
+	if (lseek(fd, 0, SEEK_SET) == -1) {
+		perror("seek failed");
+		exit(1);
+	}
+	bytesWritten = write(fd, buf, BUF_SIZE);
+	if (bytesWritten == -1) {
+		perror("failed to write to device");
+		exit(1);
+	}
 
 	if (close(fd) == 1) {
 		perror("an error on closing file");
+		exit(1);
+	}
+}
+
+// Seek over to the start of the current block.
+void seekToBlock(int fd, off_t offset) {
+	if (lseek(fd, BUF_SIZE + offset / BUF_SIZE, SEEK_SET) == -1) {
+		perror("seek failed");
 		exit(1);
 	}
 }
