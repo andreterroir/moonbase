@@ -17,59 +17,40 @@ static const char header[HEADER_SIZE] = {
 	'R', 'W', 'A', 'L', // magic
 	0x0, // version byte
 	// 8 byte LE offsets support up to 16EB large log device.
-	// The offsets are relative to the start of the firs block.
-	0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // start offset
-	0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // end offset
+	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // start offset
+	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // end offset
 };
 
-void seekToBlock(int fd, off_t offset);
+void verify_buffer(int fd, char *buf);
+void bread(int fd, char *buf);
+void bwrite(int fd, char *buf);
+void bseek(int fd, off_t offset);
+void append(int fd, char *buf, uint64_t *offset, char *bytes, int count);
 
 int main(int argc, char *argv[])
 {
 	// Enforce stricter buffer alignment than most physical block sizes, most
 	// often 512.
+	// TODO will the buffer take stack space or be allocated statically?
 	char buf[BUF_SIZE] __attribute__((aligned (4096)));
 
 	if (argc != 2) {
 		fprintf(stderr, "usage: %s [blockdev]\n", argv[0]);
 		exit(1);
 	}
-	const char *devPath = argv[1];
+	const char *dev_path = argv[1];
 
-	int fd = open(devPath, O_RDWR | O_DIRECT);
+	int fd = open(dev_path, O_RDWR | O_DIRECT);
 	if (fd == -1)
 	{
 		perror("open failed");
 		exit(1);
 	}
 
-	int pblockSize;
-	if (ioctl(fd, BLKPBSZGET, &pblockSize) == -1)
-	{
-		perror("failed to get physical block size");
-		exit(1);
-	}
-	printf("physical block size for %s is %d\n", devPath, pblockSize);
+	verify_buffer(fd, buf);
 
-	intptr_t bufptr_int = (intptr_t) buf;
-	printf("buffer address: 0x%lx\n", bufptr_int);
-	// Verify O_DIRECT requirements:
-	// buffer size must be mutliple of block size
-	assert(BUF_SIZE % pblockSize == 0);
-	// buffer must be aligned at the block size
-	assert((bufptr_int & (pblockSize - 1)) == 0);
-
-	ssize_t bytesRead = read(fd, buf, BUF_SIZE);
-	if (bytesRead == -1)
-	{
-		perror("read failed");
-		exit(1);
-	}
-	// This generally shouldn't happen, unless the block device is too small or
-	// the read was interrupted by a signal.
-	assert(bytesRead == BUF_SIZE);
-	printf("read %ld bytes from %s successfully\n", bytesRead, devPath);
-
+	// read the header block
+	bread(fd, buf);
 	printf("read magic: '%4s'\n", buf);
 	if (strncmp(header, buf, MAGIC_SIZE) != 0) {
 		printf("magic mismatch, preparing a new log device\n");
@@ -77,17 +58,8 @@ int main(int argc, char *argv[])
 		memset(buf, 0, BUF_SIZE); // reset the buffer
 		memcpy(buf, header, HEADER_SIZE);
 
-		// seek back to the beginning
-		if (lseek(fd, 0, SEEK_SET) == -1) {
-			perror("seek failed");
-			exit(1);
-		}
-		ssize_t bytesWritten = write(fd, buf, BUF_SIZE);
-		if (bytesWritten == -1) {
-			perror("writing header failed");
-			exit(1);
-		}
-		assert(bytesWritten == BUF_SIZE);
+		bseek(fd, 0);
+		bwrite(fd, buf);
 
 		if (fsync(fd) == 1) {
 			perror("fsyncing new header failed");
@@ -112,37 +84,25 @@ int main(int argc, char *argv[])
 	}
 	printf("start offset: %lu, end offset: %lu\n", soffset, eoffset);
 
-	seekToBlock(fd, eoffset);
-	memset(buf, 0, BUF_SIZE); // reset the buffer
+	bseek(fd, eoffset);
 	// read the current block
-	bytesRead = read(fd, buf, BUF_SIZE);
-	assert(bytesRead == BUF_SIZE);
+	bread(fd, buf);
 
-	// TODO handle records spilling into following blocks
-	// append two records one by one
+	// append two records
 	char record1[] = { 0xde, 0xad, 0xbe, 0xef };
-	printf("sizeof(record1): %ld\n", sizeof(record1));
-	printf("record1 boffset: %ld\n", eoffset % BUF_SIZE);
-	memcpy(buf + eoffset % BUF_SIZE, record1, sizeof(record1));
-	eoffset += sizeof(record1);
+	append(fd, buf, &eoffset, record1, sizeof(record1));
 	char record2[] = { 0xca, 0xfe, 0xba, 0xbe };
-	memcpy(buf + eoffset % BUF_SIZE, record2, sizeof(record2));
-	eoffset += sizeof(record2);
+	append(fd, buf, &eoffset, record2, sizeof(record2));
 
 	// overwrite the current block
-	seekToBlock(fd, eoffset);
-	ssize_t bytesWritten = write(fd, buf, BUF_SIZE);
-	if (bytesWritten == -1) {
-		perror("failed to write to device");
-		exit(1);
-	}
-	assert(bytesWritten == BUF_SIZE);
+	// bflush
+	bseek(fd, eoffset);
+	bwrite(fd, buf);
 
 	// read the records back
 	memset(buf, 0, BUF_SIZE);
-	seekToBlock(fd, eoffset);
-	bytesRead = read(fd, buf, BUF_SIZE);
-	assert(bytesRead == BUF_SIZE);
+	bseek(fd, eoffset);
+	bread(fd, buf);
 	char rbuf[4];
 	memcpy(rbuf, buf, 4);
 	printf("record: %4s\n", rbuf);
@@ -151,27 +111,15 @@ int main(int argc, char *argv[])
 
 	// checkpoint - update header and flush
 	// seek to the header
-	if (lseek(fd, 0, SEEK_SET) == -1) {
-		perror("seek failed");
-		exit(1);
-	}
-	memset(buf, 0, BUF_SIZE);
-	bytesRead = read(fd, buf, BUF_SIZE);
-	assert(bytesRead == BUF_SIZE);
+	bseek(fd, 0);
+	bread(fd, buf);
 	boffset = MAGIC_SIZE + 1 + sizeof(soffset);
 	for (int i = 0; i < sizeof(eoffset); i++) {
 		buf[boffset++] = eoffset & 0xff;
 		eoffset >>= 8;
 	}
-	if (lseek(fd, 0, SEEK_SET) == -1) {
-		perror("seek failed");
-		exit(1);
-	}
-	bytesWritten = write(fd, buf, BUF_SIZE);
-	if (bytesWritten == -1) {
-		perror("failed to write to device");
-		exit(1);
-	}
+	bseek(fd, 0);
+	bwrite(fd, buf);
 
 	if (close(fd) == 1) {
 		perror("an error on closing file");
@@ -179,10 +127,63 @@ int main(int argc, char *argv[])
 	}
 }
 
-// Seek over to the start of the current block.
-void seekToBlock(int fd, off_t offset) {
-	if (lseek(fd, BUF_SIZE + offset / BUF_SIZE, SEEK_SET) == -1) {
-		perror("seek failed");
+// Verify that the buffer satisfies requirements of O_DIRECT with regards to
+// the block size.
+void verify_buffer(int fd, char *buf)
+{
+	int pblockSize;
+	if (ioctl(fd, BLKPBSZGET, &pblockSize) == -1)
+	{
+		perror("failed to get physical block size");
 		exit(1);
 	}
+	printf("physical block size for is %d\n", pblockSize);
+
+	intptr_t bufptr_int = (intptr_t) buf;
+	printf("buffer address: 0x%lx\n", bufptr_int);
+	// Verify O_DIRECT requirements:
+	// buffer size must be mutliple of block size
+	assert(BUF_SIZE % pblockSize == 0);
+	// buffer must be aligned at the block size
+	assert((bufptr_int & (pblockSize - 1)) == 0);
+}
+
+void bread(int fd, char *buf)
+{
+	ssize_t bytes_read = read(fd, buf, BUF_SIZE);
+	if (bytes_read == -1)
+	{
+		perror("bread");
+		exit(1);
+	}
+	// This generally shouldn't happen, unless the block device is too small or
+	// the read was interrupted by a signal.
+	assert(bytes_read == BUF_SIZE);
+}
+
+void bwrite(int fd, char *buf)
+{
+		ssize_t bytesWritten = write(fd, buf, BUF_SIZE);
+		if (bytesWritten == -1) {
+			perror("bwrite");
+			exit(1);
+		}
+		assert(bytesWritten == BUF_SIZE);
+}
+
+// Seek over to the start of the current block.
+void bseek(int fd, off_t offset)
+{
+	if (lseek(fd, offset / BUF_SIZE * BUF_SIZE, SEEK_SET) == -1) {
+		perror("bseek");
+		exit(1);
+	}
+}
+
+void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
+{
+	// TODO handle records spilling into following blocks:
+	// consume bytes in BUF_SIZE chunks and flush full buffers
+	memcpy(buf + *offset % BUF_SIZE, bytes, count);
+	*offset += count;
 }
