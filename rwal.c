@@ -16,7 +16,7 @@ static const char header[HEADER_SIZE] = {
 	// 0x52, 0x57, 0x41, 0x4C
 	'R', 'W', 'A', 'L', // magic
 	0x0, // version byte
-	// 8 byte LE offsets support up to 16EB large log device.
+		 // 8 byte LE offsets support up to 16EB large log device.
 	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // start offset
 	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // end offset
 };
@@ -94,8 +94,7 @@ int main(int argc, char *argv[])
 	char record2[] = { 0xca, 0xfe, 0xba, 0xbe };
 	append(fd, buf, &eoffset, record2, sizeof(record2));
 
-	// overwrite the current block
-	// bflush
+	// flush the current block
 	bseek(fd, eoffset);
 	bwrite(fd, buf);
 
@@ -131,23 +130,25 @@ int main(int argc, char *argv[])
 // the block size.
 void verify_buffer(int fd, char *buf)
 {
-	int pblockSize;
-	if (ioctl(fd, BLKPBSZGET, &pblockSize) == -1)
+	int pblock_size;
+	if (ioctl(fd, BLKPBSZGET, &pblock_size) == -1)
 	{
 		perror("failed to get physical block size");
 		exit(1);
 	}
-	printf("physical block size for is %d\n", pblockSize);
+	printf("physical block size for is %d\n", pblock_size);
 
 	intptr_t bufptr_int = (intptr_t) buf;
 	printf("buffer address: 0x%lx\n", bufptr_int);
 	// Verify O_DIRECT requirements:
 	// buffer size must be mutliple of block size
-	assert(BUF_SIZE % pblockSize == 0);
+	assert(BUF_SIZE % pblock_size == 0);
 	// buffer must be aligned at the block size
-	assert((bufptr_int & (pblockSize - 1)) == 0);
+	assert((bufptr_int & (pblock_size - 1)) == 0);
 }
 
+// Read one block of data (BUF_SIZE bytes) from fd into buf, which is asummed
+// to have a size of least BUF_SIZE.
 void bread(int fd, char *buf)
 {
 	ssize_t bytes_read = read(fd, buf, BUF_SIZE);
@@ -161,14 +162,16 @@ void bread(int fd, char *buf)
 	assert(bytes_read == BUF_SIZE);
 }
 
+// Write one block of data from buf (BUF_SIZE bytes) to fd. The buffer size is
+// assumed to be at least BUF_SIZE.
 void bwrite(int fd, char *buf)
 {
-		ssize_t bytesWritten = write(fd, buf, BUF_SIZE);
-		if (bytesWritten == -1) {
-			perror("bwrite");
-			exit(1);
-		}
-		assert(bytesWritten == BUF_SIZE);
+	ssize_t bytes_written = write(fd, buf, BUF_SIZE);
+	if (bytes_written == -1) {
+		perror("bwrite");
+		exit(1);
+	}
+	assert(bytes_written == BUF_SIZE);
 }
 
 // Seek over to the start of the current block.
@@ -180,10 +183,37 @@ void bseek(int fd, off_t offset)
 	}
 }
 
+// Append count bytes to fd at offset. The buffer is assumed to already contain
+// the data up to offset % BUF_SIZE and have the size of exactly BUF_SIZE. When
+// the buffer is filled in, it's written to the device. A partially filled
+// buffer remains not flushed.
 void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 {
-	// TODO handle records spilling into following blocks:
-	// consume bytes in BUF_SIZE chunks and flush full buffers
-	memcpy(buf + *offset % BUF_SIZE, bytes, count);
-	*offset += count;
+	// fill the rest of the buffer
+	ssize_t buf_offset = *offset % BUF_SIZE;
+	ssize_t buf_free = BUF_SIZE - buf_offset;
+	assert(buf_offset + buf_free == BUF_SIZE);
+	ssize_t to_copy = count % (buf_free + 1); // up to buf_free bytes
+	assert(buf_offset + to_copy <= BUF_SIZE);
+	memcpy(buf + buf_offset, bytes, to_copy);
+	printf("to_copy: %ld at buf_offset: %ld, buf_free: %ld\n", to_copy,
+			buf_offset, buf_free);
+
+	*offset += count; // the final offset
+
+	count -= to_copy;
+	bytes += to_copy;
+
+	// writes bytes in BUF_SIZE chunks to directly to disk
+	while (count / BUF_SIZE > 0) {
+		bwrite(fd, bytes);
+		count -= BUF_SIZE;
+		bytes += BUF_SIZE;
+	}
+
+	// buffer the remaining data if any
+	if (count > 0) {
+		memset(buf, 0, BUF_SIZE);
+		memcpy(buf, bytes, count);
+	}
 }
