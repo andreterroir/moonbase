@@ -26,6 +26,7 @@ void bread(int fd, char *buf);
 void bwrite(int fd, char *buf);
 void bseek(int fd, off_t offset);
 void append(int fd, char *buf, uint64_t *offset, char *bytes, int count);
+void printhex(const char* label, const char *buf, int count);
 
 int main(int argc, char *argv[])
 {
@@ -104,9 +105,9 @@ int main(int argc, char *argv[])
 	bread(fd, buf);
 	char rbuf[4];
 	memcpy(rbuf, buf, 4);
-	printf("record: %4s\n", rbuf);
+	printhex("record 1", rbuf, sizeof(rbuf));
 	memcpy(rbuf, buf + 4, 4);
-	printf("record: %4s\n", rbuf);
+	printhex("record 2", rbuf, sizeof(rbuf));
 
 	// checkpoint - update header and flush
 	// seek to the header
@@ -216,4 +217,16 @@ void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 		memset(buf, 0, BUF_SIZE);
 		memcpy(buf, bytes, count);
 	}
+}
+
+void printhex(const char *label, const char *buf, int count)
+{
+	printf("%s: ", label);
+	for (int i = 0; i < count; i++)
+	{
+		if (!(i & 1)) printf("0x");
+		printf("%x", (unsigned char) buf[i]);
+		if (i & 1) putchar(' ');
+	}
+	putchar('\n');
 }
