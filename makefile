@@ -1,3 +1,5 @@
+CFLAGS = -Wall
+
 /dev/loop9: blockdev
 	sudo losetup /dev/loop9 blockdev
 
