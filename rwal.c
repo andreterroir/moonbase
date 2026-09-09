@@ -12,7 +12,7 @@
 #define BUF_SIZE 4096
 #define MAGIC_SIZE 4
 #define HEADER_SIZE 21
-static const char header[HEADER_SIZE] = {
+static const char init_header[HEADER_SIZE] = {
 	// 0x52, 0x57, 0x41, 0x4C
 	'R', 'W', 'A', 'L', // magic
 	0x0, // version byte
@@ -21,7 +21,16 @@ static const char header[HEADER_SIZE] = {
 	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // end offset
 };
 
+struct Header {
+	uint8_t version;
+	// start of the log
+	uint64_t soffset;
+	// next record offset
+	uint64_t eoffset;
+};
+
 void verify_buffer(int fd, char *buf);
+int parse_header(char *buf, struct Header *header);
 void bread(int fd, char *buf);
 void bwrite(int fd, char *buf);
 void bseek(int fd, off_t offset);
@@ -50,14 +59,13 @@ int main(int argc, char *argv[])
 
 	verify_buffer(fd, buf);
 
-	// read the header block
+	struct Header header;
 	bread(fd, buf);
-	printf("read magic: '%4s'\n", buf);
-	if (strncmp(header, buf, MAGIC_SIZE) != 0) {
+	if (parse_header(buf, &header) == -1) {
 		printf("magic mismatch, preparing a new log device\n");
 
 		memset(buf, 0, BUF_SIZE); // reset the buffer
-		memcpy(buf, header, HEADER_SIZE);
+		memcpy(buf, init_header, HEADER_SIZE);
 
 		bseek(fd, 0);
 		bwrite(fd, buf);
@@ -66,42 +74,35 @@ int main(int argc, char *argv[])
 			perror("fsyncing new header failed");
 			exit(1);
 		}
+
+		parse_header(buf, &header);
+
 		printf("written the log device header block\n");
 	}
 
-	// extract the version and the offsets
-	int boffset = MAGIC_SIZE;
-	int version = buf[boffset];
-	boffset += 1;
+	printf("start offset: %lu, end offset: %lu\n",
+			header.soffset, header.eoffset);
 
-	uint64_t soffset = 0; // start of the log
-	for (int i = 0; i < sizeof(soffset); i++) {
-		soffset += buf[boffset+i] << i * 8;
-	}
-	boffset += 8;
-	uint64_t eoffset = 0; // next record offset
-	for (int i = 0; i < sizeof(eoffset); i++) {
-		eoffset += buf[boffset+i] << i * 8;
-	}
-	printf("start offset: %lu, end offset: %lu\n", soffset, eoffset);
-
-	bseek(fd, eoffset);
+	bseek(fd, header.eoffset);
 	// read the current block
 	bread(fd, buf);
 
 	// append two records
 	char record1[] = { 0xde, 0xad, 0xbe, 0xef };
-	append(fd, buf, &eoffset, record1, sizeof(record1));
+	append(fd, buf, &header.eoffset, record1,
+			sizeof(record1));
 	char record2[] = { 0xca, 0xfe, 0xba, 0xbe };
-	append(fd, buf, &eoffset, record2, sizeof(record2));
+	append(fd, buf, &header.eoffset, record2,
+			sizeof(record2));
 
 	// flush the current block
-	bseek(fd, eoffset);
+	// overwrite the current block
+	bseek(fd, header.eoffset);
 	bwrite(fd, buf);
 
 	// read the records back
 	memset(buf, 0, BUF_SIZE);
-	bseek(fd, eoffset);
+	bseek(fd, header.eoffset);
 	bread(fd, buf);
 	char rbuf[4];
 	memcpy(rbuf, buf, 4);
@@ -113,7 +114,9 @@ int main(int argc, char *argv[])
 	// seek to the header
 	bseek(fd, 0);
 	bread(fd, buf);
-	boffset = MAGIC_SIZE + 1 + sizeof(soffset);
+	int boffset = MAGIC_SIZE + 1 +
+		sizeof(header.soffset);
+	uint64_t eoffset = header.eoffset;
 	for (int i = 0; i < sizeof(eoffset); i++) {
 		buf[boffset++] = eoffset & 0xff;
 		eoffset >>= 8;
@@ -146,6 +149,31 @@ void verify_buffer(int fd, char *buf)
 	assert(BUF_SIZE % pblock_size == 0);
 	// buffer must be aligned at the block size
 	assert((bufptr_int & (pblock_size - 1)) == 0);
+}
+
+int parse_header(char *buf, struct Header *header)
+{
+	printhex("read magic", buf, MAGIC_SIZE);
+	if (strncmp(buf, init_header, MAGIC_SIZE) != 0) return -1;
+
+	int boffset = MAGIC_SIZE;
+	header->version = buf[boffset];
+	boffset += 1;
+
+	uint64_t soffset = 0;
+	for (int i = 0; i < sizeof(soffset); i++) {
+		soffset += buf[boffset+i] << i * 8;
+	}
+	header->soffset = soffset;
+
+	boffset += 8;
+	uint64_t eoffset = 0;
+	for (int i = 0; i < sizeof(eoffset); i++) {
+		eoffset += buf[boffset+i] << i * 8;
+	}
+	header->eoffset = eoffset;
+
+	return 0;
 }
 
 // Read one block of data (BUF_SIZE bytes) from fd into buf, which is asummed
