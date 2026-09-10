@@ -11,6 +11,7 @@
 
 #define BUF_SIZE 4096
 #define MAGIC_SIZE 4
+#define VERSION_SIZE 1
 #define HEADER_SIZE 21
 static const char init_header[HEADER_SIZE] = {
 	// 0x52, 0x57, 0x41, 0x4C
@@ -31,6 +32,7 @@ struct Header {
 
 void verify_buffer(int fd, char *buf);
 int parse_header(char *buf, struct Header *header);
+void write_header(char *buf, struct Header header);
 void bread(int fd, char *buf);
 void bwrite(int fd, char *buf);
 void bseek(int fd, off_t offset);
@@ -80,7 +82,7 @@ int main(int argc, char *argv[])
 		printf("written the log device header block\n");
 	}
 
-	printf("start offset: %lu, end offset: %lu\n",
+	printf("initial start offset: %lu, end offset: %lu\n",
 			header.soffset, header.eoffset);
 
 	bseek(fd, header.eoffset);
@@ -111,18 +113,13 @@ int main(int argc, char *argv[])
 	printhex("record 2", rbuf, sizeof(rbuf));
 
 	// checkpoint - update header and flush
-	// seek to the header
-	bseek(fd, 0);
-	bread(fd, buf);
-	int boffset = MAGIC_SIZE + 1 +
-		sizeof(header.soffset);
-	uint64_t eoffset = header.eoffset;
-	for (int i = 0; i < sizeof(eoffset); i++) {
-		buf[boffset++] = eoffset & 0xff;
-		eoffset >>= 8;
-	}
+	memset(buf, 0, BUF_SIZE);
+	write_header(buf, header);
 	bseek(fd, 0);
 	bwrite(fd, buf);
+
+	printf("final start offset: %lu, end offset: %lu\n",
+			header.soffset, header.eoffset);
 
 	if (close(fd) == 1) {
 		perror("an error on closing file");
@@ -174,6 +171,21 @@ int parse_header(char *buf, struct Header *header)
 	header->eoffset = eoffset;
 
 	return 0;
+}
+
+void write_header(char *buf, struct Header header) {
+	memcpy(buf, init_header, HEADER_SIZE);
+	int boffset = MAGIC_SIZE + VERSION_SIZE;
+	uint64_t soffset = header.soffset;
+	for (int i = 0; i < sizeof(soffset); i++) {
+		buf[boffset++] = soffset & 0xff;
+		soffset >>= 8;
+	}
+	uint64_t eoffset = header.eoffset;
+	for (int i = 0; i < sizeof(eoffset); i++) {
+		buf[boffset++] = eoffset & 0xff;
+		eoffset >>= 8;
+	}
 }
 
 // Read one block of data (BUF_SIZE bytes) from fd into buf, which is asummed
