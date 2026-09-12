@@ -1,0 +1,44 @@
+#ifndef rwal_h
+#define rwal_h
+
+#include <stdint.h>
+
+struct Log {
+	int fd;
+	char *buf;
+};
+
+/*
+   ===Record Format===
+   0: 1b magic
+   1: 1b version
+   2: 4b epoch
+   6: 2b payload length
+   8: 4b CRC
+   12: payload
+ */
+
+// Open an existing or initialize a new log device.
+struct Log lopen(char *devpath);
+// Serialize payload into a record, computing the header.
+void lappend_payload(struct Log log, char *data, int count);
+// Append serialized data directly (e.g. record header or already serialized record).
+void lappend(struct Log log, char *data, int count);
+// Append data from socket, assuming the header is appended already or is a
+// part of the data stream.
+void lappend_from(struct Log log, int fd_in, int count);
+// Flush the buffer and disk cache.
+void lfsync(struct Log log);
+// Position the log offset for subsequent reads until an append. Does not
+// change the append offset - data is always appended at the end of the log.
+// which must be between soffset and eoffset (circular), at the beginning of a record.
+void lrewind(struct Log log, uint64_t offset);
+// Discards the log data until the offset.
+// Invariant: offset is between soffset and eoffset in the circular file.
+// assert((soffset <= eoffset && offset > soffset && offset <= eoffset)
+// || (soffset > eoffset && (offset <= soffset || offset > eoffset))
+void ltruncate(struct Log log, uint64_t offset);
+// Fsync the log and free the resources.
+void lclose(struct Log);
+
+#endif

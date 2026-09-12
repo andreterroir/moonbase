@@ -1,4 +1,5 @@
 #define _GNU_SOURCE // O_DIRECT - has to be defined before includes
+#include "rwal.h"
 #include <assert.h>
 #include <fcntl.h> // open
 #include <linux/fs.h> // BLKPBSZGET
@@ -44,7 +45,7 @@ int main(int argc, char *argv[])
 	// Enforce stricter buffer alignment than most physical block sizes, most
 	// often 512.
 	// TODO will the buffer take stack space or be allocated statically?
-	char buf[BUF_SIZE] __attribute__((aligned (4096)));
+	char buf[BUF_SIZE] __attribute__((aligned (BUF_SIZE)));
 
 	if (argc != 2) {
 		fprintf(stderr, "usage: %s [blockdev]\n", argv[0]);

@@ -1,5 +1,7 @@
 CFLAGS = -Wall
 
+rwal: rwal.c rwal.h
+
 /dev/loop9: blockdev
 	sudo losetup /dev/loop9 blockdev
 
