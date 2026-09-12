@@ -1,6 +1,5 @@
-CFLAGS = -Wall
-
-rwal: rwal.c rwal.h
+CFLAGS = -Wall -MMD -MP
+-include $(wildcard *.d)
 
 /dev/loop9: blockdev
 	sudo losetup /dev/loop9 blockdev
