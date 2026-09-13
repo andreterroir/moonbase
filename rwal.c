@@ -46,39 +46,33 @@ int main(int argc, char *argv[])
 	// append two records
 	// TODO use lappend_payload
 	char record1[] = { 0xde, 0xad, 0xbe, 0xef };
-	lappend(log, record1, sizeof(record1));
+	lappend(&log, record1, sizeof(record1));
 	char record2[] = { 0xca, 0xfe, 0xba, 0xbe };
-	lappend(log, record2, sizeof(record2));
+	lappend(&log, record2, sizeof(record2));
+	lfsync(log);
 
 	// read the records back
-	memset(buf, 0, BUF_SIZE);
-	bseek(fd, header.eoffset);
-	bread(fd, buf);
+	lrewind(&log, log.header.eoffset - sizeof(record1) - sizeof(record2));
 	char rbuf[4];
-	memcpy(rbuf, buf, 4);
+	lread(&log, rbuf, sizeof(rbuf));
 	printhex("record 1", rbuf, sizeof(rbuf));
-	memcpy(rbuf, buf + 4, 4);
+	lread(&log, rbuf, sizeof(rbuf));
 	printhex("record 2", rbuf, sizeof(rbuf));
 
-	// checkpoint - update header and flush
-	memset(buf, 0, BUF_SIZE);
-	write_header(buf, header);
-	bseek(fd, 0);
-	bwrite(fd, buf);
-
-	printf("final start offset: %lu, end offset: %lu\n",
-			header.soffset, header.eoffset);
-
-	if (close(fd) == 1) {
-		perror("an error on closing file");
-		exit(1);
-	}
+	lclose(log);
 }
 
 // === Interface ===
 
-struct Log lopen(char *devpath)
+struct Log lopen(char *dev_path)
 {
+	int fd = open(dev_path, O_RDWR | O_DIRECT);
+	if (fd == -1)
+	{
+		perror("open failed");
+		exit(1);
+	}
+
 	int pblock_size;
 	if (ioctl(fd, BLKPBSZGET, &pblock_size) == -1)
 	{
@@ -98,13 +92,6 @@ struct Log lopen(char *devpath)
 	assert(BUF_SIZE % pblock_size == 0);
 	// buffer must be aligned at the block size
 	assert((bufptr_int & (pblock_size - 1)) == 0);
-
-	int fd = open(dev_path, O_RDWR | O_DIRECT);
-	if (fd == -1)
-	{
-		perror("open failed");
-		exit(1);
-	}
 
 	struct Header header;
 	bread(fd, buf);
@@ -131,19 +118,69 @@ struct Log lopen(char *devpath)
 	bseek(fd, header.eoffset);
 	bread(fd, buf);
 
-	return struct Log { header, fd, buf };
+	return (struct Log){ header, fd, buf };
 }
 
-void lappend(struct Log log, char *data, int count) {
-	append(fd, buf, &log.header.eoffset, data, count);
+void lappend(struct Log *log, char *data, int count) {
+	log->roffset = -1; // no longer in read mode
+	// TODO ensure file offset is at the end of the log and buffer is filled
+	append(log->fd, log->buf, &log->header.eoffset, data, count);
 }
 
 void lfsync(struct Log log)
 {
+	// TODO only seek/write if the block if started
 	// flush the current block
-	bseek(fd, header.eoffset);
-	bwrite(fd, buf);
+	bseek(log.fd, log.header.eoffset);
+	bwrite(log.fd, log.buf);
 
+	if (fsync(log.fd) == 1) {
+		perror("lfscyn");
+		exit(1);
+	}
+}
+
+// Set the offset for subsequent reads and fill the buffer.
+// TODO track in-buffer read position
+void lrewind(struct Log *log, uint64_t offset)
+{
+	log->roffset = offset;
+	bseek(log->fd, offset);
+	bread(log->fd, log->buf);
+}
+
+// TODO move in-buffer read-position
+void lread(struct Log *log, char *buf, int count)
+{
+	memcpy(buf, log->buf + (log->roffset % BUF_SIZE), count);
+	log->roffset += count;
+}
+
+void lclose(struct Log log)
+{
+	// TODO only if started
+	// flush the current block
+	bseek(log.fd, log.header.eoffset);
+	bwrite(log.fd, log.buf);
+
+	// checkpoint - update header and flush
+	memset(log.buf, 0, BUF_SIZE);
+	write_header(log.buf, log.header);
+	bseek(log.fd, 0);
+	bwrite(log.fd, log.buf);
+
+	if (fsync(log.fd) == 1) {
+		perror("lclose fsync");
+		exit(1);
+	}
+
+	printf("final start offset: %lu, end offset: %lu\n",
+			log.header.soffset, log.header.eoffset);
+
+	if (close(log.fd) == 1) {
+		perror("an error on closing file");
+		exit(1);
+	}
 }
 
 // === Internals ===
