@@ -5,7 +5,7 @@
 #include <linux/fs.h> // BLKPBSZGET
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h> // exit
+#include <stdlib.h> // exit, aligned_alloc
 #include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h> // read
@@ -23,14 +23,6 @@ static const char init_header[HEADER_SIZE] = {
 	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // end offset
 };
 
-struct Header {
-	uint8_t version;
-	// start of the log
-	uint64_t soffset;
-	// next record offset
-	uint64_t eoffset;
-};
-
 void verify_buffer(int fd, char *buf);
 int parse_header(char *buf, struct Header *header);
 void write_header(char *buf, struct Header header);
@@ -42,66 +34,21 @@ void printhex(const char* label, const char *buf, int count);
 
 int main(int argc, char *argv[])
 {
-	// Enforce stricter buffer alignment than most physical block sizes, most
-	// often 512.
-	// TODO will the buffer take stack space or be allocated statically?
-	char buf[BUF_SIZE] __attribute__((aligned (BUF_SIZE)));
-
 	if (argc != 2) {
 		fprintf(stderr, "usage: %s [blockdev]\n", argv[0]);
 		exit(1);
 	}
-	const char *dev_path = argv[1];
+	struct Log log = lopen(argv[1]);
 
-	int fd = open(dev_path, O_RDWR | O_DIRECT);
-	if (fd == -1)
-	{
-		perror("open failed");
-		exit(1);
-	}
-
-	verify_buffer(fd, buf);
-
-	struct Header header;
-	bread(fd, buf);
-	if (parse_header(buf, &header) == -1) {
-		printf("magic mismatch, preparing a new log device\n");
-
-		memset(buf, 0, BUF_SIZE); // reset the buffer
-		memcpy(buf, init_header, HEADER_SIZE);
-
-		bseek(fd, 0);
-		bwrite(fd, buf);
-
-		if (fsync(fd) == 1) {
-			perror("fsyncing new header failed");
-			exit(1);
-		}
-
-		parse_header(buf, &header);
-
-		printf("written the log device header block\n");
-	}
-
-	printf("initial start offset: %lu, end offset: %lu\n",
-			header.soffset, header.eoffset);
-
-	bseek(fd, header.eoffset);
-	// read the current block
-	bread(fd, buf);
+	printf("start offset: %lu, end offset: %lu\n",
+			log.header.soffset, log.header.eoffset);
 
 	// append two records
+	// TODO use lappend_payload
 	char record1[] = { 0xde, 0xad, 0xbe, 0xef };
-	append(fd, buf, &header.eoffset, record1,
-			sizeof(record1));
+	lappend(log, record1, sizeof(record1));
 	char record2[] = { 0xca, 0xfe, 0xba, 0xbe };
-	append(fd, buf, &header.eoffset, record2,
-			sizeof(record2));
-
-	// flush the current block
-	// overwrite the current block
-	bseek(fd, header.eoffset);
-	bwrite(fd, buf);
+	lappend(log, record2, sizeof(record2));
 
 	// read the records back
 	memset(buf, 0, BUF_SIZE);
@@ -128,9 +75,9 @@ int main(int argc, char *argv[])
 	}
 }
 
-// Verify that the buffer satisfies requirements of O_DIRECT with regards to
-// the block size.
-void verify_buffer(int fd, char *buf)
+// === Interface ===
+
+struct Log lopen(char *devpath)
 {
 	int pblock_size;
 	if (ioctl(fd, BLKPBSZGET, &pblock_size) == -1)
@@ -138,7 +85,11 @@ void verify_buffer(int fd, char *buf)
 		perror("failed to get physical block size");
 		exit(1);
 	}
-	printf("physical block size for is %d\n", pblock_size);
+
+	char *buf = (char *) aligned_alloc(pblock_size, BUF_SIZE);
+
+	// Verify that the buffer satisfies requirements of O_DIRECT with regards to
+	// the block size.
 
 	intptr_t bufptr_int = (intptr_t) buf;
 	printf("buffer address: 0x%lx\n", bufptr_int);
@@ -147,7 +98,55 @@ void verify_buffer(int fd, char *buf)
 	assert(BUF_SIZE % pblock_size == 0);
 	// buffer must be aligned at the block size
 	assert((bufptr_int & (pblock_size - 1)) == 0);
+
+	int fd = open(dev_path, O_RDWR | O_DIRECT);
+	if (fd == -1)
+	{
+		perror("open failed");
+		exit(1);
+	}
+
+	struct Header header;
+	bread(fd, buf);
+	if (parse_header(buf, &header) == -1) {
+		printf("magic mismatch, preparing a new log device\n");
+
+		memset(buf, 0, BUF_SIZE); // reset the buffer
+		memcpy(buf, init_header, HEADER_SIZE);
+
+		bseek(fd, 0);
+		bwrite(fd, buf);
+
+		if (fsync(fd) == 1) {
+			perror("fsyncing new header failed");
+			exit(1);
+		}
+
+		parse_header(buf, &header);
+
+		printf("written the log device header block\n");
+	}
+
+	// read the current block
+	bseek(fd, header.eoffset);
+	bread(fd, buf);
+
+	return struct Log { header, fd, buf };
 }
+
+void lappend(struct Log log, char *data, int count) {
+	append(fd, buf, &log.header.eoffset, data, count);
+}
+
+void lfsync(struct Log log)
+{
+	// flush the current block
+	bseek(fd, header.eoffset);
+	bwrite(fd, buf);
+
+}
+
+// === Internals ===
 
 int parse_header(char *buf, struct Header *header)
 {

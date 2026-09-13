@@ -3,7 +3,16 @@
 
 #include <stdint.h>
 
+struct Header {
+	uint8_t version;
+	// start of the log
+	uint64_t soffset;
+	// next record offset
+	uint64_t eoffset;
+};
+
 struct Log {
+	struct Header header;
 	int fd;
 	char *buf;
 };
