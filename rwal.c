@@ -59,6 +59,13 @@ int main(int argc, char *argv[])
 	lread(&log, rbuf, sizeof(rbuf));
 	printhex("record 2", rbuf, sizeof(rbuf));
 
+	// append and then read another record
+	char record3[] = { 0xc0, 0xff, 0xee };
+	lappend(&log, record3, sizeof(record3));
+	lrewind(&log, log.header.eoffset - sizeof(record3));
+	lread(&log, rbuf, sizeof(record3));
+	printhex("record 3", rbuf, sizeof(record3));
+
 	lclose(log);
 }
 
@@ -122,17 +129,26 @@ struct Log lopen(char *dev_path)
 }
 
 void lappend(struct Log *log, char *data, int count) {
-	log->roffset = -1; // no longer in read mode
+	if (log->roffset != -1) {
+		if (log->header.eoffset / BUF_SIZE != log->roffset / BUF_SIZE) {
+			// seek and refill the buffer if the write block differs from the
+			// read block
+			bseek(log->fd, log->header.eoffset);
+			bread(log->fd, log->buf);
+		}
+		log->roffset = -1; // no longer in read mode
+	}
 	// TODO ensure file offset is at the end of the log and buffer is filled
 	append(log->fd, log->buf, &log->header.eoffset, data, count);
 }
 
 void lfsync(struct Log log)
 {
-	// TODO only seek/write if the block if started
-	// flush the current block
-	bseek(log.fd, log.header.eoffset);
-	bwrite(log.fd, log.buf);
+	// flush the current block if not full
+	// a full block is flushed on append
+	if (log.header.eoffset % BUF_SIZE != 0) {
+		bwrite(log.fd, log.buf);
+	}
 
 	if (fsync(log.fd) == 1) {
 		perror("lfscyn");
@@ -141,12 +157,15 @@ void lfsync(struct Log log)
 }
 
 // Set the offset for subsequent reads and fill the buffer.
-// TODO track in-buffer read position
 void lrewind(struct Log *log, uint64_t offset)
 {
 	log->roffset = offset;
-	bseek(log->fd, offset);
-	bread(log->fd, log->buf);
+	if (offset / BUF_SIZE != log->header.eoffset / BUF_SIZE) {
+		bseek(log->fd, log->header.eoffset);
+		bwrite(log->fd, log->buf);
+		bseek(log->fd, offset);
+		bread(log->fd, log->buf);
+	}
 }
 
 // TODO move in-buffer read-position
@@ -276,6 +295,11 @@ void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 	memcpy(buf + buf_offset, bytes, to_copy);
 	printf("to_copy: %ld at buf_offset: %ld, buf_free: %ld\n", to_copy,
 			buf_offset, buf_free);
+	// flush the buffer if full
+	if (buf_free == to_copy) {
+		bseek(fd, *offset);
+		bwrite(fd, buf);
+	}
 
 	*offset += count; // the final offset
 
