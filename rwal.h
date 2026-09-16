@@ -3,6 +3,62 @@
 
 #include <stdint.h>
 
+/*
+   ===Header Format===
+   0:	4b magic
+   4:	1b version
+   5:	4b iseq - incarnation sequence number
+   9:	4b irnd - random incarnation salt
+   13:	8b ioffset - starting incarnation offset
+   21:	8b soffset - log start offset
+   29:	8b eoffset - log end offset
+   33:	4b CRC
+   37:	zero padding until end of the block
+
+   The magic identifies the data as RWAL. The version controls both the header
+   and the record format. A change in format requires checkpointing log data,
+   truncating the log and rewriting the header.
+
+   The start offset points to the first record in the log; end offset points to
+   next free offset offset available for the next record. Log is circular - if
+   start offset is larger than end offset, records data continues from the
+   beginning of the first block (block zero is reserved for the log header).
+   Start and end offsets are equal only when the log is empty. If an append
+   would result in the end offset exceeding or being equal to the start offset
+   than the log is full and must be truncated to free space.
+
+   Truncation starts a new incarnation, which invalidates existing records,
+   treated as free space that can be overridden. Records that belong to an
+   incarnation are identified by an incremented sequence number combined with a
+   random salt that prevents collisions on a wraparound.
+
+   A prefix of the log checkpointed by the application can be truncated, which
+   does not introduce a new incarnation or free up space, but reduces the
+   number of log records to be reprocessed. Incarnation offset delimits the
+   records from the current incarnation - when reached by end offset the log
+   must be fully truncated.
+
+   CRC detects log header corruption and is computed from all preceeding bytes.
+ */
+
+/*
+   ===Record Format===
+   1:	4b incarnation seq
+   5:	4b incarnation rnd
+   9:	2b payload length
+   11:	4b header CRC
+   15:	4b payload CRC
+   19:	payload
+
+   The header CRC checksum allows to detect when a record header was written
+   partially, for example when it's split across consecutive blocks. It's
+   computed from all preceeding record header bytes, importantly including
+   payload length, and must be verified before reading the record payload.
+
+   Similarly, the payload CRC allows to detect incomplete writes of the
+   payload, making it safe to write over block boundaries.
+ */
+
 struct Header {
 	uint8_t version;
 	// start of the log
@@ -18,16 +74,6 @@ struct Log {
 	// -1 when the log is not in a read mode
 	int64_t roffset;
 };
-
-/*
-   ===Record Format===
-   0: 1b magic
-   1: 1b version
-   2: 4b epoch
-   6: 2b payload length
-   8: 4b CRC
-   12: payload
- */
 
 // Open an existing or initialize a new log device.
 struct Log lopen(char *dev_path);
