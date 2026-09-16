@@ -5,15 +5,15 @@
 
 /*
    ===Header Format===
-   0:	4b magic
-   4:	1b version
-   5:	4b iseq - incarnation sequence number
-   9:	4b irnd - random incarnation salt
-   13:	8b ioffset - starting incarnation offset
-   21:	8b soffset - log start offset
-   29:	8b eoffset - log end offset
-   33:	4b CRC
-   37:	zero padding until end of the block
+   0:	3b magic "RWL"
+   3:	1b version
+   4:	4b iseq - incarnation sequence number
+   8:	4b irnd - random incarnation salt
+   12:	8b ioffset - starting incarnation offset
+   20:	8b soffset - log start offset
+   28:	8b eoffset - log end offset
+   36:	4b CRC
+   40:	zero padding until end of the block
 
    The magic identifies the data as RWAL. The version controls both the header
    and the record format. A change in format requires checkpointing log data,
@@ -38,21 +38,21 @@
    records from the current incarnation - when reached by end offset the log
    must be fully truncated.
 
-   CRC detects log header corruption and is computed from all preceeding bytes.
+   CRC detects log header corruption and is computed from all preceding bytes.
  */
 
 /*
    ===Record Format===
-   1:	4b incarnation seq
-   5:	4b incarnation rnd
-   9:	2b payload length
-   11:	4b header CRC
-   15:	4b payload CRC
-   19:	payload
+   0:	4b incarnation seq
+   4:	4b incarnation rnd
+   8:	2b payload length
+   10:	4b header CRC
+   14:	4b payload CRC
+   18:	payload
 
    The header CRC checksum allows to detect when a record header was written
    partially, for example when it's split across consecutive blocks. It's
-   computed from all preceeding record header bytes, importantly including
+   computed from all preceding record header bytes, importantly including
    payload length, and must be verified before reading the record payload.
 
    Similarly, the payload CRC allows to detect incomplete writes of the
