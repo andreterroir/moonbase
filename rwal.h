@@ -11,10 +11,12 @@
    logical blocks (further referred to as block), at least as large as the
    physical block. Block zero is reserved for the log header and any future
    extensions, such as index. The remaining blocks are used for WAL records
-   written sequentially. The header is always written atomically, while the
-   records are allowed to be split across block boundaries. The record blocks
-   are treated as circular space - upon reaching the end of the last block the
-   data continues at the beginning of the first block.
+   written sequentially. The header is updated atomically by ensuring its size
+   is below the *physical* block size, which is assumed to be written
+   atomically. The records are allowed to be split across block boundaries. The
+   record blocks are treated as continuous circular space without padding. Upon
+   reaching the end of the last block the data continues at the beginning of
+   the first block.
 
    HEADER LAYOUT
 
@@ -52,10 +54,10 @@
    log from the beginning.
 
    Valid log records must match the log incarnation identified by an
-   incremented sequence number combined with a random salt that prevents
-   collisions on a wraparound. The initial incarnation is 0. Log truncation
-   starts a new incarnation, which invalidates existing records, treated as
-   free space that can be overridden.
+   incremented sequence number combined with a salt (non-zero and randomized
+   each incarnation), that prevents collisions on a wraparound. The initial
+   incarnation is 0. Log truncation starts a new incarnation, which invalidates
+   existing records, treated as free space that can be overridden.
 
    A prefix of the log checkpointed by the application can be trimmed, which
    does not introduce a new incarnation or free up space, but reduces the
@@ -90,6 +92,8 @@
    - An initial header durable before any records are appended.
    - Record appends are durable before header.
    - An updated header is durable on a new incarnation.
+   - An application must durably checkpoint the data before trimming or
+   truncating the log.
  */
 
 struct Header {
@@ -126,9 +130,6 @@ void lfsync(struct Log log);
 void lrewind(struct Log *log, uint64_t offset);
 void lread(struct Log *log, char *buf, int count);
 // Discards the log data until the offset.
-// Invariant: offset is between soffset and eoffset in the circular file.
-// assert((soffset <= eoffset && offset > soffset && offset <= eoffset)
-// || (soffset > eoffset && (offset <= soffset || offset > eoffset))
 void ltruncate(struct Log *log, uint64_t offset);
 // Fsync the log and free the resources.
 void lclose(struct Log log);
