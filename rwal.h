@@ -4,51 +4,78 @@
 #include <stdint.h>
 
 /*
-   ===Header Format===
+   LOG FORMAT
+
+   All reads and writes are multiples of and memory aligned to the physical
+   block size - a requirement imposed by O_DIRECT. WAL is written and read in
+   logical blocks (further referred to as block), at least as large as the
+   physical block. Block zero is reserved for the log header and any future
+   extensions, such as index. The remaining blocks are used for WAL records
+   written sequentially. The header is always written atomically, while the
+   records are allowed to be split across block boundaries. The record blocks
+   are treated as circular space - upon reaching the end of the last block the
+   data continues at the beginning of the first block.
+
+   HEADER LAYOUT
+
    0:	3b magic "RWL"
-   3:	1b version
+   3:	1b version (currently 1)
    4:	4b iseq - incarnation sequence number
    8:	4b irnd - random incarnation salt
    12:	8b ioffset - starting incarnation offset
    20:	8b soffset - log start offset
    28:	8b eoffset - log end offset
-   36:	4b CRC
+   36:	4b crc
    40:	zero padding until end of the block
 
-   The magic identifies the data as RWAL. The version controls both the header
-   and the record format. A change in format requires checkpointing log data,
-   truncating the log and rewriting the header.
+   Multi-byte values are stored in little-endian byte order. Given that
+   most contemporary CPU architectures are LE, it allows for a future
+   optimization to rely on the native byte order.
 
-   The start offset points to the first record in the log; end offset points to
-   next free offset offset available for the next record. Log is circular - if
-   start offset is larger than end offset, records data continues from the
-   beginning of the first block (block zero is reserved for the log header).
-   Start and end offsets are equal only when the log is empty. If an append
-   would result in the end offset exceeding or being equal to the start offset
-   than the log is full and must be truncated to free space.
+   LOG SEMANTICS
 
-   Truncation starts a new incarnation, which invalidates existing records,
-   treated as free space that can be overridden. Records that belong to an
-   incarnation are identified by an incremented sequence number combined with a
-   random salt that prevents collisions on a wraparound.
+   The magic identifies the data as RWAL. The version (currently 1) controls
+   both the header and the record format. A change in format requires
+   checkpointing log data, truncating the log and rewriting the header.
 
-   A prefix of the log checkpointed by the application can be truncated, which
+   The start offset points to the first record in the log. End offset points to
+   the offset after the last record. When the log is initialized both offsets
+   point to the beginning of the first block. Start and end offsets are equal
+   only when the log is empty.
+
+   The header is not updated on each append - in a steady state the current end
+   offset is tracked in memory. The on-disk value is out of date - log contains
+   record data until at least the end offset recorded in the header, but likely
+   more. After restart to find the next append offset the application must read
+   the log starting from the header end offset until the first invalid record.
+   The end offset allows to find the append position without reprocessing the
+   log from the beginning.
+
+   Valid log records must match the log incarnation identified by an
+   incremented sequence number combined with a random salt that prevents
+   collisions on a wraparound. The initial incarnation is 0. Log truncation
+   starts a new incarnation, which invalidates existing records, treated as
+   free space that can be overridden.
+
+   A prefix of the log checkpointed by the application can be trimmed, which
    does not introduce a new incarnation or free up space, but reduces the
-   number of log records to be reprocessed. Incarnation offset delimits the
-   records from the current incarnation - when reached by end offset the log
-   must be fully truncated.
+   number of log records to be reprocessed. Trimming only moves the log start
+   offset. The incarnation offset delimits records from the current incarnation
+   and is equal to the start offset when it began. When the end offset reaches
+   the incarnation offset, the log must be fully truncated to free up space -
+   records from the current incarnation are never overwritten.
 
-   CRC detects log header corruption and is computed from all preceding bytes.
- */
+   CRC detects the log header corruption and is computed from all preceding
+   bytes.
 
-/*
-   ===Record Format===
-   0:	4b incarnation seq
-   4:	4b incarnation rnd
-   8:	2b payload length
-   10:	4b header CRC
-   14:	4b payload CRC
-   18:	payload
+   RECORD LAYOUT
+
+   0:	4b iseq - incarnation sequence number
+   4:	4b irnd - random incarnation salt
+   8:	4b plen - payload length
+   12:	4b hcrc - header CRC
+   16:	4b pcrc - payload CRC
+   20:	payload
 
    The header CRC checksum allows to detect when a record header was written
    partially, for example when it's split across consecutive blocks. It's
@@ -57,6 +84,12 @@
 
    Similarly, the payload CRC allows to detect incomplete writes of the
    payload, making it safe to write over block boundaries.
+
+   INVARIANTS
+
+   - An initial header durable before any records are appended.
+   - Record appends are durable before header.
+   - An updated header is durable on a new incarnation.
  */
 
 struct Header {
