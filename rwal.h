@@ -8,15 +8,14 @@
 
    All reads and writes are multiples of and memory aligned to the physical
    block size - a requirement imposed by O_DIRECT. WAL is written and read in
-   logical blocks (further referred to as block), at least as large as the
+   logical blocks (further referred to as "block"), at least as large as the
    physical block. Block zero is reserved for the log header and any future
    extensions, such as index. The remaining blocks are used for WAL records
-   written sequentially. The header is updated atomically by ensuring its size
-   is below the *physical* block size, which is assumed to be written
-   atomically. The records are allowed to be split across block boundaries. The
-   record blocks are treated as continuous circular space without padding. Upon
-   reaching the end of the last block the data continues at the beginning of
-   the first block.
+   written sequentially. The header fits within a single *physical* block which
+   is assumed to be written atomically by the storage device. The records are
+   allowed to be split across block boundaries. The record blocks are treated
+   as continuous circular space without padding. Upon reaching the end of the
+   last block, the data continues at the beginning of the first block.
 
    HEADER LAYOUT
 
@@ -47,11 +46,11 @@
 
    The header is not updated on each append - in a steady state the current end
    offset is tracked in memory. The on-disk value is out of date - log contains
-   record data until at least the end offset recorded in the header, but likely
-   more. After restart to find the next append offset the application must read
-   the log starting from the header end offset until the first invalid record.
-   The end offset allows to find the append position without reprocessing the
-   log from the beginning.
+   record data until at least the end offset recorded in the header. After
+   restart, to find the next append offset, the application must read the log
+   starting from the header end offset until the first invalid record. The end
+   offset allows to find the append position without reprocessing the log from
+   the beginning.
 
    Valid log records must match the log incarnation identified by an
    incremented sequence number combined with a salt (non-zero and randomized
@@ -60,12 +59,11 @@
    existing records, treated as free space that can be overridden.
 
    A prefix of the log checkpointed by the application can be trimmed, which
-   does not introduce a new incarnation or free up space, but reduces the
-   number of log records to be reprocessed. Trimming only moves the log start
-   offset. The incarnation offset delimits records from the current incarnation
-   and is equal to the start offset when it began. When the end offset reaches
-   the incarnation offset, the log must be fully truncated to free up space -
-   records from the current incarnation are never overwritten.
+   moves the start offset without introducing a new incarnation or freeing up
+   space, reducing the number of log records to be reprocessed. The incarnation
+   offset delimits records from the current incarnation and is equal to the
+   start offset when it began. When the end offset reaches the incarnation
+   offset, the log must be fully truncated.
 
    CRC detects the log header corruption and is computed from all preceding
    bytes.
@@ -94,6 +92,7 @@
    - An updated header is durable on a new incarnation.
    - An application must durably checkpoint the data before trimming or
    truncating the log.
+   - Records from the current incarnation are never overwritten.
  */
 
 struct Header {
