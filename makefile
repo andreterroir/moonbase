@@ -7,7 +7,10 @@ CFLAGS = -Wall -MMD -MP
 blockdev:
 	dd if=/dev/zero of=blockdev bs=1024 count=1024
 
-rwal_test: rwal_test.c unity/unity.c
+rwal_test: rwal.c rwal_test.c unity/unity.c
+	cc $(CFLAGS) $^ -o $@
+
+rwal: main.c rwal.c
 	cc $(CFLAGS) $^ -o $@
 
 .PHONY: test

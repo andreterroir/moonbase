@@ -95,6 +95,17 @@
    - Records from the current incarnation are never overwritten.
  */
 
+#define BUF_SIZE 4096 // WAL block size
+
+#define MAGIC_SIZE 3
+#define VERSION_SIZE 1
+#define IRND_SIZE 4
+#define IRND_OFFSET 8
+#define CRC_OFFSET 36
+#define HEADER_SIZE 40
+
+extern const char init_header[];
+
 struct Header {
 	uint8_t version;
 	// start of the log
@@ -132,5 +143,7 @@ void lread(struct Log *log, char *buf, int count);
 void ltruncate(struct Log *log, uint64_t offset);
 // Fsync the log and free the resources.
 void lclose(struct Log log);
+
+void printhex(const char* label, const char *buf, int count);
 
 #endif

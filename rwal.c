@@ -1,5 +1,5 @@
 #define _GNU_SOURCE // O_DIRECT - has to be defined before includes
-#include "rwal.h"
+
 #include <assert.h>
 #include <fcntl.h> // open
 #include <linux/fs.h> // BLKPBSZGET
@@ -10,64 +10,26 @@
 #include <sys/ioctl.h>
 #include <unistd.h> // read
 
-#define BUF_SIZE 4096
-#define MAGIC_SIZE 4
-#define VERSION_SIZE 1
-#define HEADER_SIZE 21
-static const char init_header[HEADER_SIZE] = {
-	// 0x52, 0x57, 0x41, 0x4C
-	'R', 'W', 'A', 'L', // magic
-	0x0, // version byte
-		 // 8 byte LE offsets support up to 16EB large log device.
-	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // start offset 4096
-	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // end offset 4096
+#include "rwal.h"
+#include "rwal_internal.h"
+
+const char init_header[HEADER_SIZE] = {
+	0x52, 0x57, 0x4C, // magic: "RWL"
+	0x1, // version: 1
+	0x0, 0x0, 0x0, 0x0, // iseq: 0
+	0x0, 0x0, 0x0, 0x0, // irnd: placeholder
+	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // ioffset: 4096
+	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // soffset: 4096
+	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // eoffset: 4096
+	0x0, 0x0, 0x0, 0x0, // crc: placeholder
 };
 
-void verify_buffer(int fd, char *buf);
 int parse_header(char *buf, struct Header *header);
 void write_header(char *buf, struct Header header);
 void bread(int fd, char *buf);
 void bwrite(int fd, char *buf);
 void bseek(int fd, off_t offset);
 void append(int fd, char *buf, uint64_t *offset, char *bytes, int count);
-void printhex(const char* label, const char *buf, int count);
-
-int main(int argc, char *argv[])
-{
-	if (argc != 2) {
-		fprintf(stderr, "usage: %s [blockdev]\n", argv[0]);
-		exit(1);
-	}
-	struct Log log = lopen(argv[1]);
-
-	printf("start offset: %lu, end offset: %lu\n",
-			log.header.soffset, log.header.eoffset);
-
-	// append two records
-	// TODO use lappend_payload
-	char record1[] = { 0xde, 0xad, 0xbe, 0xef };
-	lappend(&log, record1, sizeof(record1));
-	char record2[] = { 0xca, 0xfe, 0xba, 0xbe };
-	lappend(&log, record2, sizeof(record2));
-	lfsync(log);
-
-	// read the records back
-	lrewind(&log, log.header.eoffset - sizeof(record1) - sizeof(record2));
-	char rbuf[4];
-	lread(&log, rbuf, sizeof(rbuf));
-	printhex("record 1", rbuf, sizeof(rbuf));
-	lread(&log, rbuf, sizeof(rbuf));
-	printhex("record 2", rbuf, sizeof(rbuf));
-
-	// append and then read another record
-	char record3[] = { 0xc0, 0xff, 0xee };
-	lappend(&log, record3, sizeof(record3));
-	lrewind(&log, log.header.eoffset - sizeof(record3));
-	lread(&log, rbuf, sizeof(record3));
-	printhex("record 3", rbuf, sizeof(record3));
-
-	lclose(log);
-}
 
 // === Interface ===
 
@@ -105,9 +67,7 @@ struct Log lopen(char *dev_path)
 	if (parse_header(buf, &header) == -1) {
 		printf("magic mismatch, preparing a new log device\n");
 
-		memset(buf, 0, BUF_SIZE); // reset the buffer
-		memcpy(buf, init_header, HEADER_SIZE);
-
+		initialize_header(buf);
 		bseek(fd, 0);
 		bwrite(fd, buf);
 
@@ -211,22 +171,40 @@ int parse_header(char *buf, struct Header *header)
 
 	int boffset = MAGIC_SIZE;
 	header->version = buf[boffset];
-	boffset += 1;
+	boffset += VERSION_SIZE;
 
-	uint64_t soffset = 0;
-	for (int i = 0; i < sizeof(soffset); i++) {
-		soffset += buf[boffset+i] << i * 8;
-	}
-	header->soffset = soffset;
+	header->soffset = readle(buf + boffset, 8);
 
 	boffset += 8;
-	uint64_t eoffset = 0;
-	for (int i = 0; i < sizeof(eoffset); i++) {
-		eoffset += buf[boffset+i] << i * 8;
-	}
-	header->eoffset = eoffset;
+	header->eoffset = readle(buf + boffset, 8);
 
 	return 0;
+}
+
+uint64_t readle(const char *buf, int count)
+{
+	assert(count <= sizeof(uint64_t));
+	uint64_t res = 0;
+	for (int i = 0; i < count; i++) {
+		res += buf[i] << i * 8;
+	}
+	return res;
+}
+
+void initialize_header(char *buf) {
+		memset(buf, 0, BUF_SIZE);
+		memcpy(buf, init_header, HEADER_SIZE);
+
+		// generate a non-zero incarnation salt
+		long r; // long is at least 32 bits
+		while ((r = random()) == 0);
+		int offset = IRND_OFFSET;
+		for (int i = 0; i < IRND_SIZE; i++) {
+			// the sign after >> is implementation defined
+			buf[offset++] = (char) (r >> i * 8);
+		}
+
+		// TODO compute crc
 }
 
 void write_header(char *buf, struct Header header) {
