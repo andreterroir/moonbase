@@ -24,7 +24,6 @@ const char init_header[HEADER_SIZE] = {
 	0x0, 0x0, 0x0, 0x0, // crc: placeholder
 };
 
-int parse_header(char *buf, struct Header *header);
 void write_header(char *buf, struct Header header);
 void bread(int fd, char *buf);
 void bwrite(int fd, char *buf);
@@ -43,6 +42,8 @@ struct Log lopen(char *dev_path)
 	}
 
 	int pblock_size;
+	// TODO verify if O_DIRECT requires alignment to physical or logical block
+	// size
 	if (ioctl(fd, BLKPBSZGET, &pblock_size) == -1)
 	{
 		perror("failed to get physical block size");
@@ -51,9 +52,8 @@ struct Log lopen(char *dev_path)
 
 	char *buf = (char *) aligned_alloc(pblock_size, BUF_SIZE);
 
-	// Verify that the buffer satisfies requirements of O_DIRECT with regards to
-	// the block size.
-
+	// TODO Verify that the buffer satisfies requirements of O_DIRECT with
+	// regards to the block size.
 	intptr_t bufptr_int = (intptr_t) buf;
 	printf("buffer address: 0x%lx\n", bufptr_int);
 	// Verify O_DIRECT requirements:
@@ -67,6 +67,7 @@ struct Log lopen(char *dev_path)
 	if (parse_header(buf, &header) == -1) {
 		printf("magic mismatch, preparing a new log device\n");
 
+		// header = initial_header();
 		initialize_header(buf);
 		bseek(fd, 0);
 		bwrite(fd, buf);
@@ -164,19 +165,21 @@ void lclose(struct Log log)
 
 // === Internals ===
 
-int parse_header(char *buf, struct Header *header)
+int parse_header(const char *buf, struct Header *header)
 {
 	printhex("read magic", buf, MAGIC_SIZE);
 	if (strncmp(buf, init_header, MAGIC_SIZE) != 0) return -1;
 
-	int boffset = MAGIC_SIZE;
-	header->version = buf[boffset];
-	boffset += VERSION_SIZE;
+	buf += MAGIC_SIZE;
+	header->version = buf[0];
+	buf += VERSION_SIZE;
 
-	header->soffset = readle(buf + boffset, 8);
-
-	boffset += 8;
-	header->eoffset = readle(buf + boffset, 8);
+	buf = readu32le(buf, &header->iseq);
+	buf = readu32le(buf, &header->irnd);
+	buf = readu64le(buf, &header->ioffset);
+	buf = readu64le(buf, &header->soffset);
+	buf = readu64le(buf, &header->eoffset);
+	buf = readu32le(buf, &header->crc);
 
 	return 0;
 }
@@ -189,6 +192,18 @@ uint64_t readle(const char *buf, int count)
 		res += buf[i] << i * 8;
 	}
 	return res;
+}
+
+const char* readu32le(const char *buf, uint32_t *i)
+{
+	*i = readle(buf, sizeof(uint32_t));
+	return buf + sizeof(uint32_t);
+}
+
+const char* readu64le(const char *buf, uint64_t *i)
+{
+	*i = readle(buf, sizeof(uint64_t));
+	return buf + sizeof(uint64_t);
 }
 
 void initialize_header(char *buf) {

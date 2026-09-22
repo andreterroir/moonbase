@@ -108,10 +108,12 @@ extern const char init_header[];
 
 struct Header {
 	uint8_t version;
-	// start of the log
+	uint32_t iseq;
+	uint32_t irnd;
+	uint64_t ioffset;
 	uint64_t soffset;
-	// next record offset
 	uint64_t eoffset;
+	uint32_t crc;
 };
 
 struct Log {
