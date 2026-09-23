@@ -8,6 +8,7 @@
 #include <stdlib.h> // exit, aligned_alloc
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h> // statx
 #include <unistd.h> // read
 
 #include "rwal.h"
@@ -41,26 +42,36 @@ struct Log lopen(char *dev_path)
 		exit(1);
 	}
 
-	int pblock_size;
-	// TODO verify if O_DIRECT requires alignment to physical or logical block
-	// size
-	if (ioctl(fd, BLKPBSZGET, &pblock_size) == -1)
+	int block_size;
+	if (ioctl(fd, BLKSSZGET, &block_size) == -1)
 	{
-		perror("failed to get physical block size");
+		perror("failed to get logical block size");
 		exit(1);
 	}
+	printf("logical block size: %d\n", block_size);
 
-	char *buf = (char *) aligned_alloc(pblock_size, BUF_SIZE);
+	struct statx stats;
+	if (statx(0, dev_path, 0, STATX_DIOALIGN, &stats) == -1) {
+		perror("failed to get O_DIRECT alignment requirements");
+		exit(1);
+	}
+	if (stats.stx_dio_mem_align == 0) {
+		printf("direct I/O is not supported for %s\n", dev_path);
+		exit(2);
+	}
+	printf("DIO buffer alignment: %d\n", stats.stx_dio_mem_align);
+	printf("DIO offset alignement: %d\n", stats.stx_dio_offset_align);
 
-	// TODO Verify that the buffer satisfies requirements of O_DIRECT with
-	// regards to the block size.
+	char *buf = (char *) aligned_alloc(stats.stx_dio_mem_align, BUF_SIZE);
+
 	intptr_t bufptr_int = (intptr_t) buf;
 	printf("buffer address: 0x%lx\n", bufptr_int);
-	// Verify O_DIRECT requirements:
+
+	// Verify direct I/O requirements:
 	// buffer size must be mutliple of block size
-	assert(BUF_SIZE % pblock_size == 0);
+	assert(BUF_SIZE % block_size == 0);
 	// buffer must be aligned at the block size
-	assert((bufptr_int & (pblock_size - 1)) == 0);
+	assert((bufptr_int & (block_size - 1)) == 0);
 
 	struct Header header;
 	bread(fd, buf);
