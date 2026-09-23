@@ -78,17 +78,15 @@ struct Log lopen(char *dev_path)
 	if (parse_header(buf, &header) == -1) {
 		printf("magic mismatch, preparing a new log device\n");
 
-		// header = initial_header();
 		initialize_header(buf);
+		parse_header(buf, &header);
+
 		bseek(fd, 0);
 		bwrite(fd, buf);
-
 		if (fsync(fd) == 1) {
 			perror("fsyncing new header failed");
 			exit(1);
 		}
-
-		parse_header(buf, &header);
 
 		printf("written the log device header block\n");
 	}
