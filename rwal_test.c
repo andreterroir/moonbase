@@ -7,6 +7,8 @@
 void setUp() {}
 void tearDown() {}
 
+// TODO parse initialized header instead
+// - invalid header by itself is not valid
 void _parse_init_header()
 {
 	struct Header h;
@@ -81,11 +83,40 @@ void _initialize_header()
 	TEST_ASSERT_EACH_EQUAL_MEMORY(0, bp, 1, BUF_SIZE - HEADER_SIZE);
 }
 
+void _write_initialized_header()
+{
+	char buf[BUF_SIZE];
+	initialize_header(buf);
+
+	struct Header h;
+	TEST_ASSERT_EQUAL(0, parse_header(buf, &h));
+
+	uint8_t version = h.version;
+	uint32_t iseq = h.iseq;
+	uint32_t irnd = h.irnd;
+	uint64_t ioffset = h.ioffset;
+	uint64_t soffset = h.soffset;
+	uint64_t eoffset = h.eoffset;
+	uint32_t crc = h.crc;
+
+	write_header(buf, h);
+	parse_header(buf, &h);
+
+	TEST_ASSERT_EQUAL(version, h.version);
+	TEST_ASSERT_EQUAL(iseq, h.iseq);
+	TEST_ASSERT_EQUAL(irnd, h.irnd);
+	TEST_ASSERT_EQUAL(ioffset, h.ioffset);
+	TEST_ASSERT_EQUAL(soffset, h.soffset);
+	TEST_ASSERT_EQUAL(eoffset, h.eoffset);
+	TEST_ASSERT_EQUAL(crc, h.crc);
+}
+
 int main()
 {
 	UNITY_BEGIN();
 	RUN_TEST(_parse_init_header);
 	RUN_TEST(_parse_header_invalid_magic);
 	RUN_TEST(_initialize_header);
+	RUN_TEST(_write_initialized_header);
 	return UNITY_END();
 }

@@ -245,20 +245,16 @@ char* writeu64le(char *buf, uint64_t val)
 	return buf + sizeof(val);
 }
 
-// TODO adapt to new format
 void write_header(char *buf, struct Header header) {
 	memcpy(buf, init_header, HEADER_SIZE);
-	int boffset = MAGIC_SIZE + VERSION_SIZE;
-	uint64_t soffset = header.soffset;
-	for (int i = 0; i < sizeof(soffset); i++) {
-		buf[boffset++] = soffset & 0xff;
-		soffset >>= 8;
-	}
-	uint64_t eoffset = header.eoffset;
-	for (int i = 0; i < sizeof(eoffset); i++) {
-		buf[boffset++] = eoffset & 0xff;
-		eoffset >>= 8;
-	}
+	char *bp = buf;
+	bp += MAGIC_SIZE + VERSION_SIZE;
+	bp = writeu32le(bp, header.iseq);
+	bp = writeu32le(bp, header.irnd);
+	bp = writeu64le(bp, header.ioffset);
+	bp = writeu64le(bp, header.soffset);
+	bp = writeu64le(bp, header.eoffset);
+	bp = writeu32le(bp, header.crc);
 }
 
 // Read one block of data (BUF_SIZE bytes) from fd into buf, which is asummed
