@@ -218,19 +218,34 @@ const char* readu64le(const char *buf, uint64_t *i)
 void initialize_header(char *buf) {
 		memset(buf, 0, BUF_SIZE);
 		memcpy(buf, init_header, HEADER_SIZE);
+		char *bp = buf;
 
 		// generate a non-zero incarnation salt
 		long r; // long is at least 32 bits
 		while ((r = random()) == 0);
-		int offset = IRND_OFFSET;
-		for (int i = 0; i < IRND_SIZE; i++) {
-			// the sign after >> is implementation defined
-			buf[offset++] = (char) (r >> i * 8);
-		}
+		bp += IRND_OFFSET;
+		bp = writeu32le(bp, r);
 
 		// TODO compute crc
 }
 
+char* writeu32le(char *buf, uint32_t val)
+{
+	for (int i = 0; i < sizeof(val); i++) {
+		buf[i] = (char) (val >> i * 8);
+	}
+	return buf + sizeof(val);
+}
+
+char* writeu64le(char *buf, uint64_t val)
+{
+	for (int i = 0; i < sizeof(val); i++) {
+		buf[i] = (char) (val >> i * 8);
+	}
+	return buf + sizeof(val);
+}
+
+// TODO adapt to new format
 void write_header(char *buf, struct Header header) {
 	memcpy(buf, init_header, HEADER_SIZE);
 	int boffset = MAGIC_SIZE + VERSION_SIZE;

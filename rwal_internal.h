@@ -10,5 +10,7 @@ void initialize_header(char *buf);
 
 const char* readu32le(const char *buf, uint32_t *i);
 const char* readu64le(const char *buf, uint64_t *i);
+char* writeu32le(char *buf, uint32_t val);
+char* writeu64le(char *buf, uint64_t val);
 
 #endif
