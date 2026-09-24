@@ -83,7 +83,7 @@ struct Log lopen(char *dev_path)
 
 		bseek(fd, 0);
 		bwrite(fd, buf);
-		if (fsync(fd) == 1) {
+		if (fsync(fd) == -1) {
 			perror("fsyncing new header failed");
 			exit(1);
 		}
@@ -120,7 +120,7 @@ void lfsync(struct Log log)
 		bwrite(log.fd, log.buf);
 	}
 
-	if (fsync(log.fd) == 1) {
+	if (fsync(log.fd) == -11) {
 		perror("lfscyn");
 		exit(1);
 	}
@@ -158,7 +158,7 @@ void lclose(struct Log log)
 	bseek(log.fd, 0);
 	bwrite(log.fd, log.buf);
 
-	if (fsync(log.fd) == 1) {
+	if (fsync(log.fd) == -1) {
 		perror("lclose fsync");
 		exit(1);
 	}
