@@ -184,6 +184,7 @@ int parse_header(const char *buf, struct Header *header)
 	buf += VERSION_SIZE;
 
 	buf = readu32le(buf, &header->iseq);
+	// TODO assert non-zero salt
 	buf = readu32le(buf, &header->irnd);
 	buf = readu64le(buf, &header->ioffset);
 	buf = readu64le(buf, &header->soffset);

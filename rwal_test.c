@@ -7,16 +7,17 @@
 void setUp() {}
 void tearDown() {}
 
-// TODO parse initialized header instead
-// - invalid header by itself is not valid
-void _parse_init_header()
+void _parse_initialized_header()
 {
+	char buf[BUF_SIZE];
 	struct Header h;
-	TEST_ASSERT_EQUAL(0, parse_header(init_header, &h));
+	initialize_header(buf);
+
+	TEST_ASSERT_EQUAL(0, parse_header(buf, &h));
 
 	TEST_ASSERT_EQUAL(1, h.version);
 	TEST_ASSERT_EQUAL(0, h.iseq);
-	TEST_ASSERT_EQUAL(0, h.irnd);
+	TEST_ASSERT_NOT_EQUAL(0, h.irnd);
 	TEST_ASSERT_EQUAL(4096, h.ioffset);
 	TEST_ASSERT_EQUAL(4096, h.soffset);
 	TEST_ASSERT_EQUAL(4096, h.eoffset);
@@ -114,7 +115,7 @@ void _write_initialized_header()
 int main()
 {
 	UNITY_BEGIN();
-	RUN_TEST(_parse_init_header);
+	RUN_TEST(_parse_initialized_header);
 	RUN_TEST(_parse_header_invalid_magic);
 	RUN_TEST(_initialize_header);
 	RUN_TEST(_write_initialized_header);
