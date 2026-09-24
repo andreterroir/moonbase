@@ -230,20 +230,23 @@ void initialize_header(char *buf) {
 		// TODO compute crc
 }
 
-char* writeu32le(char *buf, uint32_t val)
+char* writele(char *buf, uint64_t val, int count)
 {
-	for (int i = 0; i < sizeof(val); i++) {
+	assert(count <= sizeof(uint64_t));
+	for (int i = 0; i < count; i++) {
 		buf[i] = (char) (val >> i * 8);
 	}
-	return buf + sizeof(val);
+	return buf + count;
+}
+
+char* writeu32le(char *buf, uint32_t val)
+{
+	return writele(buf, val, sizeof(uint32_t));
 }
 
 char* writeu64le(char *buf, uint64_t val)
 {
-	for (int i = 0; i < sizeof(val); i++) {
-		buf[i] = (char) (val >> i * 8);
-	}
-	return buf + sizeof(val);
+	return writele(buf, val, sizeof(uint64_t));
 }
 
 void write_header(char *buf, struct Header header) {
