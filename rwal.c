@@ -63,14 +63,14 @@ struct Log lopen(char *dev_path)
 	printf("DIO buffer alignment: %d\n", stats.stx_dio_mem_align);
 	printf("DIO offset alignement: %d\n", stats.stx_dio_offset_align);
 
-	char *buf = (char *) aligned_alloc(stats.stx_dio_mem_align, BUF_SIZE);
+	char *buf = (char *) aligned_alloc(stats.stx_dio_mem_align, BSIZE);
 
 	intptr_t bufptr_int = (intptr_t) buf;
 	printf("buffer address: 0x%lx\n", bufptr_int);
 
 	// Verify direct I/O requirements:
 	// buffer size must be mutliple of block size
-	assert(BUF_SIZE % block_size == 0);
+	assert(BSIZE % block_size == 0);
 	// buffer must be aligned at the block size
 	assert((bufptr_int & (block_size - 1)) == 0);
 
@@ -86,7 +86,7 @@ struct Log lopen(char *dev_path)
 			exit(1);
 		}
 		printf("device size: %llu bytes\n", device_bytes);
-		uint64_t blocks = device_bytes / BUF_SIZE;
+		uint64_t blocks = device_bytes / BSIZE;
 
 		initialize_header(buf, blocks);
 		parse_header(buf, &header);
@@ -110,7 +110,7 @@ struct Log lopen(char *dev_path)
 
 void lappend(struct Log *log, char *data, int count) {
 	if (log->roffset != -1) {
-		if (log->header.eoffset / BUF_SIZE != log->roffset / BUF_SIZE) {
+		if (log->header.eoffset / BSIZE != log->roffset / BSIZE) {
 			// seek and refill the buffer if the write block differs from the
 			// read block
 			bseek(log->fd, log->header.eoffset);
@@ -126,7 +126,7 @@ void lfsync(struct Log log)
 {
 	// flush the current block if not full
 	// a full block is flushed on append
-	if (log.header.eoffset % BUF_SIZE != 0) {
+	if (log.header.eoffset % BSIZE != 0) {
 		bwrite(log.fd, log.buf);
 	}
 
@@ -140,7 +140,7 @@ void lfsync(struct Log log)
 void lrewind(struct Log *log, uint64_t offset)
 {
 	log->roffset = offset;
-	if (offset / BUF_SIZE != log->header.eoffset / BUF_SIZE) {
+	if (offset / BSIZE != log->header.eoffset / BSIZE) {
 		bseek(log->fd, log->header.eoffset);
 		bwrite(log->fd, log->buf);
 		bseek(log->fd, offset);
@@ -151,7 +151,7 @@ void lrewind(struct Log *log, uint64_t offset)
 // TODO move in-buffer read-position
 void lread(struct Log *log, char *buf, int count)
 {
-	memcpy(buf, log->buf + (log->roffset % BUF_SIZE), count);
+	memcpy(buf, log->buf + (log->roffset % BSIZE), count);
 	log->roffset += count;
 }
 
@@ -163,7 +163,7 @@ void lclose(struct Log log)
 	bwrite(log.fd, log.buf);
 
 	// checkpoint - update header and flush
-	memset(log.buf, 0, BUF_SIZE);
+	memset(log.buf, 0, BSIZE);
 	write_header(log.buf, log.header);
 	bseek(log.fd, 0);
 	bwrite(log.fd, log.buf);
@@ -229,7 +229,7 @@ const char* readu64le(const char *buf, uint64_t *i)
 
 void initialize_header(char *buf, uint64_t device_blocks)
 {
-	memset(buf, 0, BUF_SIZE);
+	memset(buf, 0, BSIZE);
 	memcpy(buf, init_header, HEADER_SIZE);
 
 	// generate a non-zero incarnation salt
@@ -275,11 +275,11 @@ void write_header(char *buf, struct Header header) {
 	bp = writeu32le(bp, header.crc);
 }
 
-// Read one block of data (BUF_SIZE bytes) from fd into buf, which is asummed
-// to have a size of least BUF_SIZE.
+// Read one block of data (BSIZE bytes) from fd into buf, which is asummed
+// to have a size of least BSIZE.
 void bread(int fd, char *buf)
 {
-	ssize_t bytes_read = read(fd, buf, BUF_SIZE);
+	ssize_t bytes_read = read(fd, buf, BSIZE);
 	if (bytes_read == -1)
 	{
 		perror("bread");
@@ -287,42 +287,42 @@ void bread(int fd, char *buf)
 	}
 	// This generally shouldn't happen, unless the block device is too small or
 	// the read was interrupted by a signal.
-	assert(bytes_read == BUF_SIZE);
+	assert(bytes_read == BSIZE);
 }
 
-// Write one block of data from buf (BUF_SIZE bytes) to fd. The buffer size is
-// assumed to be at least BUF_SIZE.
+// Write one block of data from buf (BSIZE bytes) to fd. The buffer size is
+// assumed to be at least BSIZE.
 void bwrite(int fd, char *buf)
 {
-	ssize_t bytes_written = write(fd, buf, BUF_SIZE);
+	ssize_t bytes_written = write(fd, buf, BSIZE);
 	if (bytes_written == -1) {
 		perror("bwrite");
 		exit(1);
 	}
-	assert(bytes_written == BUF_SIZE);
+	assert(bytes_written == BSIZE);
 }
 
 // Seek over to the start of the current block.
 void bseek(int fd, off_t offset)
 {
-	if (lseek(fd, offset / BUF_SIZE * BUF_SIZE, SEEK_SET) == -1) {
+	if (lseek(fd, offset / BSIZE * BSIZE, SEEK_SET) == -1) {
 		perror("bseek");
 		exit(1);
 	}
 }
 
 // Append count bytes to fd at offset. The buffer is assumed to already contain
-// the data up to offset % BUF_SIZE and have the size of exactly BUF_SIZE. When
+// the data up to offset % BSIZE and have the size of exactly BSIZE. When
 // the buffer is filled in, it's written to the device. A partially filled
 // buffer remains not flushed.
 void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 {
 	// fill the rest of the buffer
-	ssize_t buf_offset = *offset % BUF_SIZE;
-	ssize_t buf_free = BUF_SIZE - buf_offset;
-	assert(buf_offset + buf_free == BUF_SIZE);
+	ssize_t buf_offset = *offset % BSIZE;
+	ssize_t buf_free = BSIZE - buf_offset;
+	assert(buf_offset + buf_free == BSIZE);
 	ssize_t to_copy = count % (buf_free + 1); // up to buf_free bytes
-	assert(buf_offset + to_copy <= BUF_SIZE);
+	assert(buf_offset + to_copy <= BSIZE);
 	memcpy(buf + buf_offset, bytes, to_copy);
 	printf("to_copy: %ld at buf_offset: %ld, buf_free: %ld\n", to_copy,
 			buf_offset, buf_free);
@@ -337,16 +337,16 @@ void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 	count -= to_copy;
 	bytes += to_copy;
 
-	// writes bytes in BUF_SIZE chunks to directly to disk
-	while (count / BUF_SIZE > 0) {
+	// writes bytes in BSIZE chunks to directly to disk
+	while (count / BSIZE > 0) {
 		bwrite(fd, bytes);
-		count -= BUF_SIZE;
-		bytes += BUF_SIZE;
+		count -= BSIZE;
+		bytes += BSIZE;
 	}
 
 	// buffer the remaining data if any
 	if (count > 0) {
-		memset(buf, 0, BUF_SIZE);
+		memset(buf, 0, BSIZE);
 		memcpy(buf, bytes, count);
 	}
 }

@@ -98,8 +98,7 @@
    - Records from the current incarnation are never overwritten.
  */
 
-// TODO rename
-#define BUF_SIZE 4096 // WAL block size
+#define BSIZE 4096 // WAL logical block size in bytes
 
 #define MAGIC_SIZE 3
 #define VERSION_SIZE 1

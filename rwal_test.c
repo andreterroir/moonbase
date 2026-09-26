@@ -9,7 +9,7 @@ void tearDown() {}
 
 void _parse_initialized_header()
 {
-	char buf[BUF_SIZE];
+	char buf[BSIZE];
 	struct Header h;
 	uint64_t device_blocks = 1 << 30;
 	initialize_header(buf, device_blocks);
@@ -40,7 +40,7 @@ void _parse_header_invalid_magic()
 
 void _initialize_header()
 {
-	char buffer[BUF_SIZE];
+	char buffer[BSIZE];
 	uint64_t device_blocks = 1 << 28; // 1TiB in 4096 (1<<12) device_blocks
 	initialize_header(buffer, device_blocks);
 	const char *bp = buffer;
@@ -89,12 +89,12 @@ void _initialize_header()
 	bp += crc_size;
 
 	// 48:	zero padding until end of the block
-	TEST_ASSERT_EACH_EQUAL_MEMORY(0, bp, 1, BUF_SIZE - HEADER_SIZE);
+	TEST_ASSERT_EACH_EQUAL_MEMORY(0, bp, 1, BSIZE - HEADER_SIZE);
 }
 
 void _write_initialized_header()
 {
-	char buf[BUF_SIZE];
+	char buf[BSIZE];
 	uint64_t device_blocks = 1UL << 36;
 	initialize_header(buf, device_blocks);
 
