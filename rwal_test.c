@@ -113,14 +113,10 @@ void _write_initialized_header()
 }
 
 void _readu32le() {
-	char positive_char[4] = { 0x0F, 0x00, 0x00, 0x00 };
+	char bytes[4] = { 0x0F, 0x00, 0x00, 0xF0 };
 	uint32_t val;
-	readu32le(positive_char, &val);
-	TEST_ASSERT_EQUAL_HEX(0x0F, val);
-
-	char negative_char[4] = { 0xF0, 0x00, 0x00, 0x00 };
-	readu32le(negative_char, &val);
-	TEST_ASSERT_EQUAL_HEX(0xF0, val);
+	readu32le(bytes, &val);
+	TEST_ASSERT_EQUAL_HEX(0xF000000F, val);
 }
 
 int main()

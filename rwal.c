@@ -199,7 +199,7 @@ uint64_t readle(const char *buf, int count)
 	assert(count <= sizeof(uint64_t));
 	uint64_t res = 0;
 	for (int i = 0; i < count; i++) {
-		res += (unsigned char) buf[i] << i * 8;
+		res |= (unsigned char) buf[i] << i * 8;
 	}
 	return res;
 }
