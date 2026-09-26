@@ -117,13 +117,21 @@ void _readu32le() {
 	uint32_t val;
 	readu32le(bytes, &val);
 	TEST_ASSERT_EQUAL_HEX32(0xF000000FUL, val);
+
+	char placeholder[4] = { 0xAA, 0xAA, 0xAA, 0xAA };
+	readu32le(placeholder, &val);
+	TEST_ASSERT_EQUAL_HEX32(0xAAAAAAAAUL, val);
 }
 
 void _readu64le() {
-	char positive_char[8] = { 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0 };
+	char bytes[8] = { 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0 };
 	uint64_t val;
-	readu64le(positive_char, &val);
+	readu64le(bytes, &val);
 	TEST_ASSERT_EQUAL_HEX64(0xF00000000000000FUL, val);
+
+	char placeholder[8] = { 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA };
+	readu64le(placeholder, &val);
+	TEST_ASSERT_EQUAL_HEX64(0xAAAAAAAAAAAAAAAAUL, val);
 }
 
 int main()
