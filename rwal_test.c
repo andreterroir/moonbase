@@ -112,6 +112,17 @@ void _write_initialized_header()
 	TEST_ASSERT_EQUAL(crc, h.crc);
 }
 
+void _readu32le() {
+	char positive_char[4] = { 0x0F, 0x00, 0x00, 0x00 };
+	uint32_t val;
+	readu32le(positive_char, &val);
+	TEST_ASSERT_EQUAL_HEX(0x0F, val);
+
+	char negative_char[4] = { 0xF0, 0x00, 0x00, 0x00 };
+	readu32le(negative_char, &val);
+	TEST_ASSERT_EQUAL_HEX(0xF0, val);
+}
+
 int main()
 {
 	UNITY_BEGIN();
@@ -119,5 +130,7 @@ int main()
 	RUN_TEST(_parse_header_invalid_magic);
 	RUN_TEST(_initialize_header);
 	RUN_TEST(_write_initialized_header);
+
+	RUN_TEST(_readu32le);
 	return UNITY_END();
 }
