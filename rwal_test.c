@@ -116,7 +116,14 @@ void _readu32le() {
 	char bytes[4] = { 0x0F, 0x00, 0x00, 0xF0 };
 	uint32_t val;
 	readu32le(bytes, &val);
-	TEST_ASSERT_EQUAL_HEX(0xF000000F, val);
+	TEST_ASSERT_EQUAL_HEX32(0xF000000FUL, val);
+}
+
+void _readu64le() {
+	char positive_char[8] = { 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0 };
+	uint64_t val;
+	readu64le(positive_char, &val);
+	TEST_ASSERT_EQUAL_HEX64(0xF00000000000000FUL, val);
 }
 
 int main()
@@ -128,5 +135,6 @@ int main()
 	RUN_TEST(_write_initialized_header);
 
 	RUN_TEST(_readu32le);
+	RUN_TEST(_readu64le);
 	return UNITY_END();
 }
