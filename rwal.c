@@ -16,13 +16,14 @@
 
 const char init_header[HEADER_SIZE] = {
 	0x52, 0x57, 0x4C, // magic: "RWL"
-	0x1, // version: 1
-	0x0, 0x0, 0x0, 0x0, // iseq: 0
-	0x0, 0x0, 0x0, 0x0, // irnd: placeholder
-	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // ioffset: 4096
-	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // soffset: 4096
-	0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // eoffset: 4096
-	0x0, 0x0, 0x0, 0x0, // crc: placeholder
+	0x01, // version: 1
+	0x00, 0x00, 0x00, 0x00, // iseq: 0
+	0xAA, 0xAA, 0xAA, 0xAA, // irnd: placeholder
+	0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, // blocks: placeholder
+	0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // ioffset: 4096
+	0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // soffset: 4096
+	0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // eoffset: 4096
+	0xAA, 0xAA, 0xAA, 0xAA, // crc: placeholder
 };
 
 void write_header(char *buf, struct Header header);
@@ -78,7 +79,16 @@ struct Log lopen(char *dev_path)
 	if (parse_header(buf, &header) == -1) {
 		printf("magic mismatch, preparing a new log device\n");
 
-		initialize_header(buf);
+		unsigned long long device_bytes;
+		if (ioctl(fd, BLKGETSIZE64, &device_bytes) == -1)
+		{
+			perror("failed to get the size of the log device");
+			exit(1);
+		}
+		printf("device size: %llu bytes\n", device_bytes);
+		uint64_t blocks = device_bytes / BUF_SIZE;
+
+		initialize_header(buf, blocks);
 		parse_header(buf, &header);
 
 		bseek(fd, 0);
@@ -186,6 +196,7 @@ int parse_header(const char *buf, struct Header *header)
 	buf = readu32le(buf, &header->iseq);
 	// TODO assert non-zero salt
 	buf = readu32le(buf, &header->irnd);
+	buf = readu64le(buf, &header->blocks);
 	buf = readu64le(buf, &header->ioffset);
 	buf = readu64le(buf, &header->soffset);
 	buf = readu64le(buf, &header->eoffset);
@@ -216,18 +227,20 @@ const char* readu64le(const char *buf, uint64_t *i)
 	return buf + sizeof(uint64_t);
 }
 
-void initialize_header(char *buf) {
-		memset(buf, 0, BUF_SIZE);
-		memcpy(buf, init_header, HEADER_SIZE);
-		char *bp = buf;
+void initialize_header(char *buf, uint64_t device_blocks)
+{
+	memset(buf, 0, BUF_SIZE);
+	memcpy(buf, init_header, HEADER_SIZE);
 
-		// generate a non-zero incarnation salt
-		long r; // long is at least 32 bits
-		while ((r = random()) == 0);
-		bp += IRND_OFFSET;
-		bp = writeu32le(bp, r);
+	// generate a non-zero incarnation salt
+	long r; // long is at least 32 bits
+	while ((r = random()) == 0);
+	writeu32le(buf + IRND_OFFSET, r);
 
-		// TODO compute crc
+	// device size
+	writeu64le(buf + BLOCKS_OFFSET, device_blocks);
+
+	// TODO compute crc
 }
 
 char* writele(char *buf, uint64_t val, int count)
@@ -255,6 +268,7 @@ void write_header(char *buf, struct Header header) {
 	bp += MAGIC_SIZE + VERSION_SIZE;
 	bp = writeu32le(bp, header.iseq);
 	bp = writeu32le(bp, header.irnd);
+	bp = writeu64le(bp, header.blocks);
 	bp = writeu64le(bp, header.ioffset);
 	bp = writeu64le(bp, header.soffset);
 	bp = writeu64le(bp, header.eoffset);
@@ -343,7 +357,7 @@ void printhex(const char *label, const char *buf, int count)
 	for (int i = 0; i < count; i++)
 	{
 		if (!(i & 1)) printf("0x");
-		printf("%x", (unsigned char) buf[i]);
+		printf("%02X", (unsigned char) buf[i]);
 		if (i & 1) putchar(' ');
 	}
 	putchar('\n');

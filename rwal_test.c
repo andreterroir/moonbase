@@ -11,17 +11,19 @@ void _parse_initialized_header()
 {
 	char buf[BUF_SIZE];
 	struct Header h;
-	initialize_header(buf);
+	uint64_t device_blocks = 1 << 30;
+	initialize_header(buf, device_blocks);
 
 	TEST_ASSERT_EQUAL(0, parse_header(buf, &h));
 
 	TEST_ASSERT_EQUAL(1, h.version);
 	TEST_ASSERT_EQUAL(0, h.iseq);
 	TEST_ASSERT_NOT_EQUAL(0, h.irnd);
+	TEST_ASSERT_EQUAL(device_blocks, h.blocks);
 	TEST_ASSERT_EQUAL(4096, h.ioffset);
 	TEST_ASSERT_EQUAL(4096, h.soffset);
 	TEST_ASSERT_EQUAL(4096, h.eoffset);
-	TEST_ASSERT_EQUAL(0, h.crc);
+	TEST_ASSERT_EQUAL_HEX(0xAAAAAAAA, h.crc); // placeholder value
 }
 
 void _parse_header_invalid_magic()
@@ -39,7 +41,8 @@ void _parse_header_invalid_magic()
 void _initialize_header()
 {
 	char buffer[BUF_SIZE];
-	initialize_header(buffer);
+	uint64_t device_blocks = 1 << 28; // 1TiB in 4096 (1<<12) device_blocks
+	initialize_header(buffer, device_blocks);
 	const char *bp = buffer;
 
     // 0:	3b magic "RWL"
@@ -60,34 +63,40 @@ void _initialize_header()
 	TEST_ASSERT_NOT_EQUAL_MEMORY(0, bp, irnd_size);
 	bp += irnd_size;
 
-	// 12:	8b ioffset - starting incarnation offset
+	// 12:	8b blocks - size of the device in blocks
+	uint64_t blocks;
+	bp = readu64le(bp, &blocks);
+	TEST_ASSERT_EQUAL_UINT64(device_blocks, blocks);
+
+	// 20:	8b ioffset - starting incarnation offset
 	uint64_t ioffset;
 	bp = readu64le(bp, &ioffset);
 	TEST_ASSERT_EQUAL_UINT64(4096, ioffset);
 
-	// 20:	8b soffset - log start offset
+	// 28:	8b soffset - log start offset
 	uint64_t soffset;
 	bp = readu64le(bp, &soffset);
 	TEST_ASSERT_EQUAL_UINT64(4096, soffset);
 
-	// 28:	8b eoffset - log end offset
+	// 36:	8b eoffset - log end offset
 	uint64_t eoffset;
 	bp = readu64le(bp, &eoffset);
 	TEST_ASSERT_EQUAL_UINT64(4096, eoffset);
 
-	// 36:	4b crc
+	// 44:	4b crc
 	int crc_size = 4;
-	TEST_ASSERT_EACH_EQUAL_HEX8(0x0, bp, crc_size);
+	TEST_ASSERT_EACH_EQUAL_HEX8(0xAA, bp, crc_size);
 	bp += crc_size;
 
-	// 40:	zero padding until end of the block
+	// 48:	zero padding until end of the block
 	TEST_ASSERT_EACH_EQUAL_MEMORY(0, bp, 1, BUF_SIZE - HEADER_SIZE);
 }
 
 void _write_initialized_header()
 {
 	char buf[BUF_SIZE];
-	initialize_header(buf);
+	uint64_t device_blocks = 1UL << 36;
+	initialize_header(buf, device_blocks);
 
 	struct Header h;
 	TEST_ASSERT_EQUAL(0, parse_header(buf, &h));
@@ -95,6 +104,7 @@ void _write_initialized_header()
 	uint8_t version = h.version;
 	uint32_t iseq = h.iseq;
 	uint32_t irnd = h.irnd;
+	device_blocks = h.blocks;
 	uint64_t ioffset = h.ioffset;
 	uint64_t soffset = h.soffset;
 	uint64_t eoffset = h.eoffset;
@@ -106,6 +116,7 @@ void _write_initialized_header()
 	TEST_ASSERT_EQUAL(version, h.version);
 	TEST_ASSERT_EQUAL(iseq, h.iseq);
 	TEST_ASSERT_EQUAL(irnd, h.irnd);
+	TEST_ASSERT_EQUAL_HEX64(device_blocks, h.blocks);
 	TEST_ASSERT_EQUAL(ioffset, h.ioffset);
 	TEST_ASSERT_EQUAL(soffset, h.soffset);
 	TEST_ASSERT_EQUAL(eoffset, h.eoffset);

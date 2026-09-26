@@ -19,15 +19,18 @@
 
    HEADER LAYOUT
 
+
+   // TODO colocate with the struct
    0:	3b magic "RWL"
    3:	1b version (currently 1)
    4:	4b iseq - incarnation sequence number
    8:	4b irnd - random incarnation salt
-   12:	8b ioffset - starting incarnation offset
-   20:	8b soffset - log start offset
-   28:	8b eoffset - log end offset
-   36:	4b crc
-   40:	zero padding until end of the block
+   12:	8b blocks - size of the device in blocks
+   20:	8b ioffset - starting incarnation offset
+   28:	8b soffset - log start offset
+   36:	8b eoffset - log end offset
+   44:	4b crc
+   48:	zero padding until end of the block
 
    Multi-byte values are stored in little-endian byte order. Given that
    most contemporary CPU architectures are LE, it allows for a future
@@ -95,14 +98,16 @@
    - Records from the current incarnation are never overwritten.
  */
 
+// TODO rename
 #define BUF_SIZE 4096 // WAL block size
 
 #define MAGIC_SIZE 3
 #define VERSION_SIZE 1
 #define IRND_SIZE 4
 #define IRND_OFFSET 8
-#define CRC_OFFSET 36
-#define HEADER_SIZE 40
+#define BLOCKS_OFFSET 12
+#define CRC_OFFSET 40
+#define HEADER_SIZE 48
 
 extern const char init_header[];
 
@@ -110,6 +115,7 @@ struct Header {
 	uint8_t version;
 	uint32_t iseq;
 	uint32_t irnd;
+	uint64_t blocks;
 	uint64_t ioffset;
 	uint64_t soffset;
 	uint64_t eoffset;
