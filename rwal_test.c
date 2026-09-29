@@ -123,7 +123,8 @@ void _write_initialized_header()
 	TEST_ASSERT_EQUAL(crc, h.crc);
 }
 
-void _readu32le() {
+void _readu32le()
+{
 	char bytes[4] = { 0x0F, 0x00, 0x00, 0xF0 };
 	uint32_t val;
 	readu32le(bytes, &val);
@@ -134,7 +135,8 @@ void _readu32le() {
 	TEST_ASSERT_EQUAL_HEX32(0xAAAAAAAAUL, val);
 }
 
-void _readu64le() {
+void _readu64le()
+{
 	char bytes[8] = { 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0 };
 	uint64_t val;
 	readu64le(bytes, &val);
@@ -143,6 +145,14 @@ void _readu64le() {
 	char placeholder[8] = { 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA };
 	readu64le(placeholder, &val);
 	TEST_ASSERT_EQUAL_HEX64(0xAAAAAAAAAAAAAAAAUL, val);
+}
+
+void _crc32c()
+{
+	char buf[4] = { 0xde, 0xad, 0xbe, 0xef };
+	TEST_ASSERT_EQUAL_HEX32(0xF1DC778E, crc32c(buf, 4));
+	char five[4] = {0x05, 0x00, 0x00, 0x00};
+	TEST_ASSERT_EQUAL_HEX32(0xEE00D08C, crc32c(five, 4));
 }
 
 int main()
@@ -155,5 +165,6 @@ int main()
 
 	RUN_TEST(_readu32le);
 	RUN_TEST(_readu64le);
+	RUN_TEST(_crc32c);
 	return UNITY_END();
 }

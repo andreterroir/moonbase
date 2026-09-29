@@ -14,4 +14,6 @@ const char* readu64le(const char *buf, uint64_t *i);
 char* writeu32le(char *buf, uint32_t val);
 char* writeu64le(char *buf, uint64_t val);
 
+uint32_t crc32c(const char *buf, int count);
+
 #endif

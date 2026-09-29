@@ -1,4 +1,4 @@
-CFLAGS = -Wall -MMD -MP
+CFLAGS = -Wall -MMD -MP -march=native
 -include $(wildcard *.d)
 
 /dev/loop9: blockdev

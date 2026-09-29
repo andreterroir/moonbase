@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <fcntl.h> // open
 #include <linux/fs.h> // BLKPBSZGET
+#include <nmmintrin.h> // _mm_crc32_u32
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h> // exit, aligned_alloc
@@ -225,6 +226,15 @@ const char* readu64le(const char *buf, uint64_t *i)
 {
 	*i = readle(buf, sizeof(uint64_t));
 	return buf + sizeof(uint64_t);
+}
+
+uint32_t crc32c(const char *buf, int count)
+{
+	uint32_t crc = 0xffffffffu;
+	// TODO user larger inputs and respect alignment
+	for (int i = 0; i < count; i++)
+		crc = _mm_crc32_u8(crc, ((const uint8_t*)buf)[i]);
+	return crc ^ 0xffffffffu;
 }
 
 void initialize_header(char *buf, uint64_t device_blocks)
