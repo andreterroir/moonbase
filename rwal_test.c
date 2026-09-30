@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 #include "rwal.h"
 #include "rwal_internal.h"
@@ -149,10 +150,32 @@ void _readu64le()
 
 void _crc32c()
 {
-	char buf[4] = { 0xde, 0xad, 0xbe, 0xef };
-	TEST_ASSERT_EQUAL_HEX32(0xF1DC778E, crc32c(buf, 4));
-	char five[4] = {0x05, 0x00, 0x00, 0x00};
-	TEST_ASSERT_EQUAL_HEX32(0xEE00D08C, crc32c(five, 4));
+	char beef[4] = { 0xde, 0xad, 0xbe, 0xef };
+	TEST_ASSERT_EQUAL_HEX32(0xF1DC778E, crc32c(beef, 4));
+
+	char five32[4] = {0x05, 0x00, 0x00, 0x00};
+	TEST_ASSERT_EQUAL_HEX32(0xEE00D08C, crc32c(five32, 4));
+	char five8[1] = {0x05};
+	TEST_ASSERT_EQUAL_HEX32(0x678C474D, crc32c(five8, 1));
+
+	// make the CRC computation to go through each step to reach 8 byte
+	// alignment boundary and to process the remaining tail data
+	// 1 byte + 2 bytes + 4 bytes + 40 bytes + 4 bytes + 2 bytes + 1 byte
+	const char bytes[54] = {
+		0x60, 0xea, 0xe5, 0x09, 0xc6, 0x9b, 0xfd, 0x1d, 0x2d, 0x56, 0x99, 0xd6, 0xd0,
+		0x69, 0x15, 0x93, 0x15, 0xc6, 0x6d, 0x52, 0xf9, 0x84, 0x6e, 0x24, 0x07, 0x93,
+		0xc6, 0xfb, 0x42, 0x39, 0x01, 0xe6, 0x43, 0x3a, 0x0d, 0x8d, 0x73, 0x23, 0x77,
+		0x39, 0xf5, 0x8e, 0x6f, 0xda, 0x40, 0x1f, 0xbb, 0x61, 0x06, 0xfd, 0x31, 0x72,
+		0xe2, 0x0c
+	};
+	char *misaligned = (char *) aligned_alloc(8, 55); // 54 bytes shifted by 1
+	char *ptr = misaligned + 1;
+	memcpy(ptr, bytes, 54);
+
+	TEST_ASSERT_EQUAL_HEX32(0x33BBC033, crc32c(ptr, 1));
+	TEST_ASSERT_EQUAL_HEX32(0x518A4818, crc32c(ptr, 3));
+	TEST_ASSERT_EQUAL_HEX32(0xDDEEFC53, crc32c(ptr, 7));
+	TEST_ASSERT_EQUAL_HEX32(0x6707AC08, crc32c(ptr, 54));
 }
 
 int main()

@@ -230,10 +230,44 @@ const char* readu64le(const char *buf, uint64_t *i)
 
 uint32_t crc32c(const char *buf, int count)
 {
+	unsigned char *ptr = (unsigned char*)buf;
+	const unsigned char *eptr = ptr + count;
 	uint32_t crc = 0xffffffffu;
-	// TODO user larger inputs and respect alignment
-	for (int i = 0; i < count; i++)
-		crc = _mm_crc32_u8(crc, ((const uint8_t*)buf)[i]);
+
+	// process data in growing chunks until 8 byte alignment boundary
+	if (ptr + 1 <= eptr && (uintptr_t)ptr & 0x01) {
+		crc = _mm_crc32_u8(crc, *(uint8_t *)ptr++);
+	}
+	if (ptr + 2 <= eptr && (uintptr_t)ptr & 0x02) {
+		crc = _mm_crc32_u16(crc, *(uint16_t *)ptr);
+		ptr += 2;
+	}
+	if (ptr + 4 <= eptr && (uintptr_t)ptr & 0x04) {
+		crc = _mm_crc32_u32(crc, *(uint32_t *)ptr);
+		ptr += 4;
+	}
+
+	// main loop
+	while (ptr + 8 <= eptr) {
+		crc = _mm_crc32_u64(crc, *(uint64_t *)ptr);
+		ptr += 8;
+	}
+
+	// process the remaining data in shrinking chunks
+	if (ptr + 4 <= eptr) {
+		crc = _mm_crc32_u32(crc, *(uint32_t *)ptr);
+		ptr += 4;
+	}
+	if (ptr + 2 <= eptr) {
+		crc = _mm_crc32_u16(crc, *(uint16_t *)ptr);
+		ptr += 2;
+	}
+	if (ptr + 1 <= eptr) {
+		crc = _mm_crc32_u8(crc, *(uint8_t *)ptr++);
+	}
+
+	assert(ptr == eptr);
+
 	return crc ^ 0xffffffffu;
 }
 
