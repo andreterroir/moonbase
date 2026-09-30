@@ -153,6 +153,10 @@ void _crc32c()
 	char beef[4] = { 0xde, 0xad, 0xbe, 0xef };
 	TEST_ASSERT_EQUAL_HEX32(0xF1DC778E, crc32c(beef, 4));
 
+	TEST_ASSERT_EQUAL_HEX32(0x0, crc32c(beef, 0));
+	char zero[1] = { 0x00 };
+	TEST_ASSERT_EQUAL_HEX32(0x527D5351, crc32c(zero, 1));
+
 	char five32[4] = {0x05, 0x00, 0x00, 0x00};
 	TEST_ASSERT_EQUAL_HEX32(0xEE00D08C, crc32c(five32, 4));
 	char five8[1] = {0x05};
@@ -168,14 +172,21 @@ void _crc32c()
 		0x39, 0xf5, 0x8e, 0x6f, 0xda, 0x40, 0x1f, 0xbb, 0x61, 0x06, 0xfd, 0x31, 0x72,
 		0xe2, 0x0c
 	};
-	char *misaligned = (char *) aligned_alloc(8, 55); // 54 bytes shifted by 1
-	char *ptr = misaligned + 1;
-	memcpy(ptr, bytes, 54);
-
-	TEST_ASSERT_EQUAL_HEX32(0x33BBC033, crc32c(ptr, 1));
-	TEST_ASSERT_EQUAL_HEX32(0x518A4818, crc32c(ptr, 3));
-	TEST_ASSERT_EQUAL_HEX32(0xDDEEFC53, crc32c(ptr, 7));
-	TEST_ASSERT_EQUAL_HEX32(0x6707AC08, crc32c(ptr, 54));
+	for (int i = 0; i < 8; i++) {
+		char *misaligned = (char *) aligned_alloc(8, sizeof(bytes) + i);
+		char *ptr = misaligned + i;
+		memcpy(ptr, bytes, 54);
+		TEST_ASSERT_EQUAL_HEX32(0x33BBC033, crc32c(ptr, 1));
+		TEST_ASSERT_EQUAL_HEX32(0xF92FD2F6, crc32c(ptr, 2));
+		TEST_ASSERT_EQUAL_HEX32(0x518A4818, crc32c(ptr, 3));
+		TEST_ASSERT_EQUAL_HEX32(0xB0199D75, crc32c(ptr, 4));
+		TEST_ASSERT_EQUAL_HEX32(0xF388CBF1, crc32c(ptr, 5));
+		TEST_ASSERT_EQUAL_HEX32(0x58AA60C0, crc32c(ptr, 6));
+		TEST_ASSERT_EQUAL_HEX32(0xDDEEFC53, crc32c(ptr, 7));
+		TEST_ASSERT_EQUAL_HEX32(0xBFA31F36, crc32c(ptr, 8));
+		TEST_ASSERT_EQUAL_HEX32(0xDB159C1A, crc32c(ptr, 9));
+		TEST_ASSERT_EQUAL_HEX32(0x6707AC08, crc32c(ptr, 54));
+	}
 }
 
 int main()
