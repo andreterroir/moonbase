@@ -156,17 +156,19 @@ void lread(struct Log *log, char *buf, int count)
 	log->roffset += count;
 }
 
-// TODO update eoffset and recompute CRC
 void lclose(struct Log log)
 {
-	// TODO only if started
-	// flush the current block
-	bseek(log.fd, log.header.eoffset);
-	bwrite(log.fd, log.buf);
+	// flush the current block if started
+	if (log.header.eoffset % BSIZE != 0) {
+		bseek(log.fd, log.header.eoffset);
+		bwrite(log.fd, log.buf);
+	}
 
-	// checkpoint - update header and flush
+	// update header CRC and flush
 	memset(log.buf, 0, BSIZE);
 	write_header(log.buf, log.header);
+	log.header.crc = crc32c(log.buf, HEADER_SIZE);
+	writeu32le(log.buf + CRC_OFFSET, log.header.crc);
 	bseek(log.fd, 0);
 	bwrite(log.fd, log.buf);
 
@@ -287,7 +289,7 @@ void initialize_header(char *buf, uint64_t device_blocks)
 
 	// compute CRC from the bytes above
 	uint32_t crc = crc32c(buf, CRC_OFFSET);
-	printf("header CRC: 0x%08X\n", crc);
+	printf("initial header CRC: 0x%08X\n", crc);
 	writeu32le(buf + CRC_OFFSET, crc);
 }
 
