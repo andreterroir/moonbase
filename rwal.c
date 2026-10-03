@@ -156,6 +156,7 @@ void lread(struct Log *log, char *buf, int count)
 	log->roffset += count;
 }
 
+// TODO update eoffset and recompute CRC
 void lclose(struct Log log)
 {
 	// TODO only if started
@@ -284,7 +285,10 @@ void initialize_header(char *buf, uint64_t device_blocks)
 	// device size
 	writeu64le(buf + BLOCKS_OFFSET, device_blocks);
 
-	// TODO compute crc
+	// compute CRC from the bytes above
+	uint32_t crc = crc32c(buf, CRC_OFFSET);
+	printf("header CRC: 0x%08X\n", crc);
+	writeu32le(buf + CRC_OFFSET, crc);
 }
 
 char* writele(char *buf, uint64_t val, int count)
@@ -400,9 +404,7 @@ void printhex(const char *label, const char *buf, int count)
 	printf("%s: ", label);
 	for (int i = 0; i < count; i++)
 	{
-		if (!(i & 1)) printf("0x");
-		printf("%02X", (unsigned char) buf[i]);
-		if (i & 1) putchar(' ');
+		printf("0x%02X ", (unsigned char) buf[i]);
 	}
 	putchar('\n');
 }

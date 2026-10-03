@@ -105,7 +105,7 @@
 #define IRND_SIZE 4
 #define IRND_OFFSET 8
 #define BLOCKS_OFFSET 12
-#define CRC_OFFSET 40
+#define CRC_OFFSET 44
 #define HEADER_SIZE 48
 
 extern const char init_header[];

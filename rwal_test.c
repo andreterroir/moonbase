@@ -14,6 +14,7 @@ void _parse_initialized_header()
 	struct Header h;
 	uint64_t device_blocks = 1 << 30;
 	initialize_header(buf, device_blocks);
+	printhex("header", buf, HEADER_SIZE);
 
 	TEST_ASSERT_EQUAL(0, parse_header(buf, &h));
 
@@ -24,7 +25,7 @@ void _parse_initialized_header()
 	TEST_ASSERT_EQUAL(4096, h.ioffset);
 	TEST_ASSERT_EQUAL(4096, h.soffset);
 	TEST_ASSERT_EQUAL(4096, h.eoffset);
-	TEST_ASSERT_EQUAL_HEX(0xAAAAAAAA, h.crc); // placeholder value
+	TEST_ASSERT_EQUAL_HEX(0xD594A75F, h.crc);
 }
 
 void _parse_header_invalid_magic()
@@ -44,6 +45,8 @@ void _initialize_header()
 	char buffer[BSIZE];
 	uint64_t device_blocks = 1 << 28; // 1TiB in 4096 (1<<12) device_blocks
 	initialize_header(buffer, device_blocks);
+	printhex("header", buffer, HEADER_SIZE);
+
 	const char *bp = buffer;
 
     // 0:	3b magic "RWL"
@@ -85,9 +88,9 @@ void _initialize_header()
 	TEST_ASSERT_EQUAL_UINT64(4096, eoffset);
 
 	// 44:	4b crc
-	int crc_size = 4;
-	TEST_ASSERT_EACH_EQUAL_HEX8(0xAA, bp, crc_size);
-	bp += crc_size;
+	uint32_t crc;
+	bp = readu32le(bp, &crc);
+	TEST_ASSERT_EQUAL_HEX32(0x5E0EFE16, crc);
 
 	// 48:	zero padding until end of the block
 	TEST_ASSERT_EACH_EQUAL_MEMORY(0, bp, 1, BSIZE - HEADER_SIZE);
