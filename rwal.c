@@ -167,7 +167,7 @@ void lclose(struct Log log)
 	// update header CRC and flush
 	memset(log.buf, 0, BSIZE);
 	write_header(log.buf, log.header);
-	log.header.crc = crc32c(log.buf, HEADER_SIZE);
+	log.header.crc = crc32c(log.buf, CRC_OFFSET);
 	writeu32le(log.buf + CRC_OFFSET, log.header.crc);
 	bseek(log.fd, 0);
 	bwrite(log.fd, log.buf);
@@ -193,6 +193,7 @@ int parse_header(const char *buf, struct Header *header)
 	printhex("read magic", buf, MAGIC_SIZE);
 	if (strncmp(buf, init_header, MAGIC_SIZE) != 0) return -1;
 
+	uint32_t crc = crc32c(buf, CRC_OFFSET);
 	buf += MAGIC_SIZE;
 	header->version = buf[0];
 	buf += VERSION_SIZE;
@@ -205,6 +206,12 @@ int parse_header(const char *buf, struct Header *header)
 	buf = readu64le(buf, &header->soffset);
 	buf = readu64le(buf, &header->eoffset);
 	buf = readu32le(buf, &header->crc);
+
+	if (crc != header->crc) {
+		fprintf(stderr, "header CRC mismatch: expected 0x%02X, on disk "
+				"0x%02X\n", crc, header->crc);
+		exit(1);
+	}
 
 	return 0;
 }
