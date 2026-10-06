@@ -14,7 +14,6 @@ void _parse_initialized_header()
 	struct Header h;
 	uint64_t device_blocks = 1 << 30;
 	initialize_header(buf, device_blocks);
-	printhex("header", buf, HEADER_SIZE);
 
 	TEST_ASSERT_EQUAL(0, parse_header(buf, &h));
 
@@ -45,7 +44,6 @@ void _initialize_header()
 	char buffer[BSIZE];
 	uint64_t device_blocks = 1 << 28; // 1TiB in 4096 (1<<12) device_blocks
 	initialize_header(buffer, device_blocks);
-	printhex("header", buffer, HEADER_SIZE);
 
 	const char *bp = buffer;
 

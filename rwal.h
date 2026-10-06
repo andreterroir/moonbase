@@ -18,20 +18,29 @@
    last block, the data continues at the beginning of the first block.
 
    HEADER LAYOUT
+ */
 
+struct Header {
+	/*0:	3b magic "RWL"*/
+	/*3:*/	uint8_t version;	// version (currently 1)
+	/*4:*/	uint32_t iseq;		// incarnation sequence number
+	/*8:*/	uint32_t irnd;		// random incarnation salt
+	/*12:*/	uint64_t blocks;	// size of the device in blocks
+	/*20:*/	uint64_t ioffset;	// starting incarnation offset
+	/*28:*/	uint64_t soffset;	// log start offset
+	/*36:*/	uint64_t eoffset;	// log end offset
+	/*44:*/	uint32_t crc;		// CRC32C covering bytes [0..44)
+};
 
-   // TODO colocate with the struct
-   0:	3b magic "RWL"
-   3:	1b version (currently 1)
-   4:	4b iseq - incarnation sequence number
-   8:	4b irnd - random incarnation salt
-   12:	8b blocks - size of the device in blocks
-   20:	8b ioffset - starting incarnation offset
-   28:	8b soffset - log start offset
-   36:	8b eoffset - log end offset
-   44:	4b crc
-   48:	zero padding until end of the block
+#define MAGIC_SIZE 3
+#define VERSION_SIZE 1
+#define IRND_SIZE 4
+#define IRND_OFFSET 8
+#define BLOCKS_OFFSET 12
+#define CRC_OFFSET 44
+#define HEADER_SIZE 48
 
+/*
    Multi-byte values are stored in little-endian byte order. Given that
    most contemporary CPU architectures are LE, it allows for a future
    optimization to rely on the native byte order.
@@ -100,26 +109,7 @@
 
 #define BSIZE 4096 // WAL logical block size in bytes
 
-#define MAGIC_SIZE 3
-#define VERSION_SIZE 1
-#define IRND_SIZE 4
-#define IRND_OFFSET 8
-#define BLOCKS_OFFSET 12
-#define CRC_OFFSET 44
-#define HEADER_SIZE 48
-
 extern const char init_header[];
-
-struct Header {
-	uint8_t version;
-	uint32_t iseq;
-	uint32_t irnd;
-	uint64_t blocks;
-	uint64_t ioffset;
-	uint64_t soffset;
-	uint64_t eoffset;
-	uint32_t crc;
-};
 
 struct Log {
 	struct Header header;
