@@ -21,15 +21,16 @@
  */
 
 struct Header {
-	/*0:	3b magic "RWL"*/
-	/*3:*/	uint8_t version;	// version (currently 1)
-	/*4:*/	uint32_t iseq;		// incarnation sequence number
-	/*8:*/	uint32_t irnd;		// random incarnation salt
-	/*12:*/	uint64_t blocks;	// size of the device in blocks
-	/*20:*/	uint64_t ioffset;	// starting incarnation offset
-	/*28:*/	uint64_t soffset;	// log start offset
-	/*36:*/	uint64_t eoffset;	// log end offset
-	/*44:*/	uint32_t crc;		// CRC32C covering bytes [0..44)
+	/* 0:		3b magic "RWL" */
+	/* 3:  */	uint8_t version;	// version (currently 1)
+	/* 4:  */	uint32_t iseq;		// incarnation sequence number
+	/* 8:  */	uint32_t irnd;		// random incarnation salt
+	/* 12: */	uint64_t blocks;	// size of the device in blocks
+	/* 20: */	uint64_t ioffset;	// starting incarnation offset
+	/* 28: */	uint64_t soffset;	// log start offset
+	/* 36: */	uint64_t eoffset;	// log end offset
+	/* 44: */	uint32_t crc;		// CRC32C covering bytes [0..44)
+	/* 48:		zero padding until the end of the block */
 };
 
 #define MAGIC_SIZE 3
@@ -81,14 +82,20 @@ struct Header {
    bytes.
 
    RECORD LAYOUT
+   */
 
-   0:	4b iseq - incarnation sequence number
-   4:	4b irnd - random incarnation salt
-   8:	4b plen - payload length
-   12:	4b hcrc - header CRC
-   16:	4b pcrc - payload CRC
-   20:	payload
+struct RecordHeader {
+   /* 0: */		uint32_t iseq;	// incarnation sequence number
+   /* 4: */		uint32_t irnd;	// random incarnation salt
+   /* 8: */		uint32_t plen;	// payload length
+   /* 12: */	uint32_t hcrc;	// header CRC
+   /* 16: */	uint32_t pcrc;	// payload CRC
+   /* 20:		plen bytes */
+};
 
+#define RHEADER_SIZE 20
+
+/*
    The header CRC checksum allows to detect when a record header was written
    partially, for example when it's split across consecutive blocks. It's
    computed from all preceding record header bytes, importantly including
@@ -122,8 +129,8 @@ struct Log {
 // Open an existing or initialize a new log device.
 struct Log lopen(char *dev_path);
 // Serialize payload into a record, computing the header.
-void lappend_payload(struct Log *log, char *data, int count);
-// Append serialized data directly (e.g. record header or already serialized record).
+void lappend_record(struct Log *log, char *payload, int count);
+// Append alreday serialized record data directly.
 void lappend(struct Log *log, char *data, int count);
 // Append data from socket, assuming the header is appended already or is a
 // part of the data stream.

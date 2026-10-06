@@ -125,6 +125,17 @@ void _write_initialized_header()
 	TEST_ASSERT_EQUAL(crc, h.crc);
 }
 
+void _encode_record_header()
+{
+	// TODO
+	struct RecordHeader h;
+	h.iseq = 92;
+	h.irnd = 0xfeed;
+	h.plen = 4;
+	h.hcrc = 0xaaaaaaaa;
+	h.pcrc = 0xbbbbbbbb;
+}
+
 void _readu32le()
 {
 	char bytes[4] = { 0x0F, 0x00, 0x00, 0xF0 };
@@ -197,7 +208,6 @@ int main()
 	RUN_TEST(_parse_header_invalid_magic);
 	RUN_TEST(_initialize_header);
 	RUN_TEST(_write_initialized_header);
-
 	RUN_TEST(_readu32le);
 	RUN_TEST(_readu64le);
 	RUN_TEST(_crc32c);

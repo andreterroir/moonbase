@@ -109,7 +109,19 @@ struct Log lopen(char *dev_path)
 	return (struct Log){ header, fd, buf };
 }
 
-void lappend(struct Log *log, char *data, int count) {
+void lappend_record(struct Log *log, char *payload, int count)
+{
+	char header[RHEADER_SIZE];
+	struct RecordHeader h;
+	// TODO
+	// compute header
+	// encode header
+	// append header
+	// append payload
+}
+
+void lappend(struct Log *log, char *data, int count)
+{
 	if (log->roffset != -1) {
 		if (log->header.eoffset / BSIZE != log->roffset / BSIZE) {
 			// seek and refill the buffer if the write block differs from the
