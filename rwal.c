@@ -138,7 +138,6 @@ void lappend(struct Log *log, char *data, int count)
 		}
 		log->roffset = -1; // no longer in read mode
 	}
-	// TODO ensure file offset is at the end of the log and buffer is filled
 	append(log->fd, log->buf, &log->header.eoffset, data, count);
 }
 

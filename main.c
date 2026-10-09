@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -24,27 +25,32 @@ int main(int argc, char *argv[])
 			log.header.soffset, log.header.eoffset);
 
 	// append two records
-	// TODO use lappend_payload
 	char record1[] = { 0xde, 0xad, 0xbe, 0xef };
-	lappend(&log, record1, sizeof(record1));
+	const int plen = sizeof(record1);
+	lappend_record(&log, record1, sizeof(record1));
 	char record2[] = { 0xca, 0xfe, 0xba, 0xbe };
-	lappend(&log, record2, sizeof(record2));
+	assert(sizeof(record2) == plen);
+	lappend_record(&log, record2, sizeof(record2));
 	lfsync(log);
 
 	// read the records back
-	lrewind(&log, log.header.eoffset - sizeof(record1) - sizeof(record2));
-	char rbuf[4];
-	lread(&log, rbuf, sizeof(rbuf));
-	printhex("record 1", rbuf, sizeof(rbuf));
-	lread(&log, rbuf, sizeof(rbuf));
-	printhex("record 2", rbuf, sizeof(rbuf));
+	int record_len = RHEADER_SIZE + plen;
+	int record_offset = log.header.eoffset - 2 * record_len;
+	printf("reading records at %d\n", record_offset);
+	lrewind(&log, record_offset);
+	char rbuf[record_len];
+	lread(&log, rbuf, record_len);
+	printhex("record 1", rbuf, record_len);
+	lread(&log, rbuf, record_len);
+	printhex("record 2", rbuf, record_len);
 
 	// append and then read another record
 	char record3[] = { 0xc0, 0xff, 0xee };
-	lappend(&log, record3, sizeof(record3));
-	lrewind(&log, log.header.eoffset - sizeof(record3));
-	lread(&log, rbuf, sizeof(record3));
-	printhex("record 3", rbuf, sizeof(record3));
+	lappend_record(&log, record3, sizeof(record3));
+	record_len = RHEADER_SIZE + sizeof(record3);
+	lrewind(&log, log.header.eoffset - record_len);
+	lread(&log, rbuf, record_len);
+	printhex("record 3", rbuf, record_len);
 
 	lclose(log);
 }
