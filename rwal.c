@@ -109,26 +109,22 @@ struct Log lopen(char *dev_path)
 	return (struct Log){ header, fd, buf };
 }
 
-void encode_record(char *buf, uint32_t iseq, uint32_t irnd, const char *bytes, int count)
+void encode_rheader(char *buf, uint32_t iseq, uint32_t irnd, const char *bytes, int count)
 {
 	char *bp = buf;
-
 	bp = writeu32le(bp, iseq);
 	bp = writeu32le(bp, irnd);
 	bp = writeu32le(bp, count);
 	bp = writeu32le(bp, crc32c(buf, HCRC_OFFSET));
 	bp = writeu32le(bp, crc32c(bytes, count));
-	memcpy(bp, bytes, count);
 }
 
 void lappend_record(struct Log *log, char *payload, int count)
 {
-	// TODO implement splitting across blocks
-	// 1. encode record header
-	// 2. write header buffer, spilling into the next block
-	// 3. encode record
-	// 4. write record buffer, splitting across one or more blocks
-	encode_record(log->buf, log->header.iseq, log->header.irnd, payload, count);
+	char hbuf[RHEADER_SIZE];
+	encode_rheader(hbuf, log->header.iseq, log->header.irnd, payload, count);
+	append(log->fd, log->buf, &log->header.eoffset, hbuf, RHEADER_SIZE);
+	append(log->fd, log->buf, &log->header.eoffset, payload, count);
 }
 
 void lappend(struct Log *log, char *data, int count)

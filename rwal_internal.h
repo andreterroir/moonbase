@@ -8,7 +8,7 @@
 void initialize_header(char *buf, uint64_t blocks);
 int parse_header(const char *buf, struct Header *header);
 void write_header(char *buf, struct Header header);
-void encode_record(char *buf, uint32_t iseq, uint32_t irnd, const char *bytes, int count);
+void encode_rheader(char *buf, uint32_t iseq, uint32_t irnd, const char *bytes, int count);
 
 const char* readu32le(const char *buf, uint32_t *i);
 const char* readu64le(const char *buf, uint64_t *i);
