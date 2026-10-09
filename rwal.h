@@ -84,6 +84,7 @@ struct Header {
    RECORD LAYOUT
    */
 
+# define HCRC_OFFSET 12
 struct RecordHeader {
    /* 0: */		uint32_t iseq;	// incarnation sequence number
    /* 4: */		uint32_t irnd;	// random incarnation salt

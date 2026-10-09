@@ -125,15 +125,38 @@ void _write_initialized_header()
 	TEST_ASSERT_EQUAL(crc, h.crc);
 }
 
-void _encode_record_header()
+void _encode_record()
 {
-	// TODO
-	struct RecordHeader h;
-	h.iseq = 92;
-	h.irnd = 0xfeed;
-	h.plen = 4;
-	h.hcrc = 0xaaaaaaaa;
-	h.pcrc = 0xbbbbbbbb;
+	const char payload[] = { 0xca, 0xfe, 0xba, 0xbe };
+	const int plen = sizeof(payload);
+	char buf[RHEADER_SIZE + plen];
+	const int iseq = 92;
+	const int irnd = 0xfeed;
+
+	encode_record(buf, iseq, irnd, payload, plen);
+	printhex("record", buf, sizeof(buf));
+
+	const char *bp = buf;
+
+	uint32_t val;
+	bp = readu32le(bp, &val);
+	TEST_ASSERT_EQUAL(iseq, val);
+
+	bp = readu32le(bp, &val);
+	TEST_ASSERT_EQUAL(irnd, val);
+
+	bp = readu32le(bp, &val);
+	TEST_ASSERT_EQUAL(plen, val);
+
+	// header CRC
+	bp = readu32le(bp, &val);
+	TEST_ASSERT_EQUAL_HEX(0x7A606998u, val);
+
+	// payload CRC
+	bp = readu32le(bp, &val);
+	TEST_ASSERT_EQUAL_HEX(0xD3B7F26Cu, val);
+
+	TEST_ASSERT_EQUAL_MEMORY(payload, bp, plen);
 }
 
 void _readu32le()
@@ -208,6 +231,7 @@ int main()
 	RUN_TEST(_parse_header_invalid_magic);
 	RUN_TEST(_initialize_header);
 	RUN_TEST(_write_initialized_header);
+	RUN_TEST(_encode_record);
 	RUN_TEST(_readu32le);
 	RUN_TEST(_readu64le);
 	RUN_TEST(_crc32c);
