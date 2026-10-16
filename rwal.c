@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <fcntl.h> // open
 #include <linux/fs.h> // BLKPBSZGET
-#include <nmmintrin.h> // _mm_crc32_u32
+#include <arm_acle.h> // _mm_crc32_u32
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h> // exit, aligned_alloc
@@ -264,34 +264,34 @@ uint32_t crc32c(const char *buf, int count)
 
 	// process data in growing chunks until 8 byte alignment boundary
 	if (ptr + 1 <= eptr && (uintptr_t)ptr & 0x01) {
-		crc = _mm_crc32_u8(crc, *(uint8_t *)ptr++);
+		crc = __crc32cb(crc, *(uint8_t *)ptr++);
 	}
 	if (ptr + 2 <= eptr && (uintptr_t)ptr & 0x02) {
-		crc = _mm_crc32_u16(crc, *(uint16_t *)ptr);
+		crc = __crc32ch(crc, *(uint16_t *)ptr);
 		ptr += 2;
 	}
 	if (ptr + 4 <= eptr && (uintptr_t)ptr & 0x04) {
-		crc = _mm_crc32_u32(crc, *(uint32_t *)ptr);
+		crc = __crc32cw(crc, *(uint32_t *)ptr);
 		ptr += 4;
 	}
 
 	// main loop
 	while (ptr + 8 <= eptr) {
-		crc = _mm_crc32_u64(crc, *(uint64_t *)ptr);
+		crc = __crc32cd(crc, *(uint64_t *)ptr);
 		ptr += 8;
 	}
 
 	// process the remaining data in shrinking chunks
 	if (ptr + 4 <= eptr) {
-		crc = _mm_crc32_u32(crc, *(uint32_t *)ptr);
+		crc = __crc32cw(crc, *(uint32_t *)ptr);
 		ptr += 4;
 	}
 	if (ptr + 2 <= eptr) {
-		crc = _mm_crc32_u16(crc, *(uint16_t *)ptr);
+		crc = __crc32ch(crc, *(uint16_t *)ptr);
 		ptr += 2;
 	}
 	if (ptr + 1 <= eptr) {
-		crc = _mm_crc32_u8(crc, *(uint8_t *)ptr++);
+		crc = __crc32cb(crc, *(uint8_t *)ptr++);
 	}
 
 	assert(ptr == eptr);
