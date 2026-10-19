@@ -1,25 +1,6 @@
 = RWAL
 
-== Build and test
-
-Run `make` to build `main`, or `make test` to build and run the tests.
-Compiler and linker options can be supplied through `CC`, `CPPFLAGS`,
-`CFLAGS`, `LDFLAGS`, and `LDLIBS`; changing their values rebuilds the objects.
-
-When upgrading from the old `rwal` build, run `make clean` before building.
-This removes the old executable and dependency files, which are incompatible
-with the per-object dependencies used by the new build.
-
-`make clean` preserves the backing file and any loop-device associations.
-Run clean and build as separate commands, not concurrent Make goals.
-
 == Create a test block device
-
-Run `make loopdev` to create the backing file if absent, attach it to a free
-loop device, and print its path. An existing association is reused.
-This requires `sudo` and `losetup`; normal builds do not configure devices.
-
-To perform the steps manually:
 
 Create a 1MB file of zeroes:
 
@@ -29,4 +10,4 @@ dd if=/dev/zero of=blockdev bs=1024 count=1024
 Create a virtual block loop device backed by the file:
 
 [listing]
-sudo losetup --find --show --nooverlap blockdev
+losetup --find --show blockdev
