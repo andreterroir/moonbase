@@ -1,7 +1,10 @@
-rwal
+/main
 rwal_test
 a.out
 blockdev
 readme.html
 core
 *.d
+*.o
+.build-config
+.build-config.tmp
