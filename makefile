@@ -13,7 +13,10 @@ rwal_test: rwal.c rwal_test.c unity/unity.c
 rwal: main.c rwal.c
 	cc $(CFLAGS) $^ -o $@
 
-.PHONY: test
+.PHONY: test clean
 
 test: rwal_test
 	./rwal_test
+
+clean:
+	rm --verbose --force *.d rwal rwal_test

@@ -149,6 +149,4 @@ void ltruncate(struct Log *log, uint64_t offset);
 // Fsync the log and free the resources.
 void lclose(struct Log log);
 
-void printhex(const char* label, const char *buf, int count);
-
 #endif

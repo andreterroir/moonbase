@@ -5,6 +5,8 @@
 
 #include "rwal.h"
 
+void printhex(const char* label, const char *buf, int count);
+
 void initialize_header(char *buf, uint64_t blocks);
 int parse_header(const char *buf, struct Header *header);
 void write_header(char *buf, struct Header header);

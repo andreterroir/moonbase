@@ -4,6 +4,7 @@
 #include <time.h>
 
 #include "rwal.h"
+#include "rwal_internal.h"
 
 int main(int argc, char *argv[])
 {
@@ -20,6 +21,9 @@ int main(int argc, char *argv[])
 	srandom(ts.tv_nsec);
 
 	struct Log log = lopen(argv[1]);
+
+	// TODO print log header
+	// TODO print existing log records
 
 	printf("start offset: %lu, end offset: %lu\n",
 			log.header.soffset, log.header.eoffset);

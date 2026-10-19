@@ -1,6 +1,8 @@
 #ifndef crc32c_h
 #define crc32c_h
 
+#include <stdint.h>
+
 #ifdef __SSE4_2__
 
 #include <nmmintrin.h>
