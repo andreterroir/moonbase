@@ -7,6 +7,7 @@
 
 void printhex(const char* label, const char *buf, int count);
 void print_header(struct Header header);
+void print_record(struct RecordHeader header, char *payload);
 
 void initialize_header(char *buf, uint64_t blocks);
 int parse_header(const char *buf, struct Header *header);

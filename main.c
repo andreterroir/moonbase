@@ -6,6 +6,8 @@
 #include "rwal.h"
 #include "rwal_internal.h"
 
+#define MAX_RECORD 1024
+
 int main(int argc, char *argv[])
 {
 	if (argc != 2) {
@@ -23,10 +25,14 @@ int main(int argc, char *argv[])
 	struct Log log = lopen(argv[1]);
 
 	print_header(log.header);
-	// TODO print existing log records
+	lrewind(&log, log.header.soffset);
+	struct RecordHeader rheader;
+	char rbuf[MAX_RECORD];
+	while(lread_record(&log, &rheader, rbuf) != -1) {
+		print_record(rheader, rbuf);
+	}
 
-	printf("start offset: %lu, end offset: %lu\n",
-			log.header.soffset, log.header.eoffset);
+	// TODO set the actually discovered eoffset
 
 	// append two records
 	char record1[] = { 0xde, 0xad, 0xbe, 0xef };
@@ -42,7 +48,6 @@ int main(int argc, char *argv[])
 	int record_offset = log.header.eoffset - 2 * record_len;
 	printf("reading records at %d\n", record_offset);
 	lrewind(&log, record_offset);
-	char rbuf[record_len];
 	lread(&log, rbuf, record_len);
 	printhex("record 1", rbuf, record_len);
 	lread(&log, rbuf, record_len);

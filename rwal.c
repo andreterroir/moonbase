@@ -167,11 +167,34 @@ void lrewind(struct Log *log, uint64_t offset)
 	}
 }
 
-// TODO move in-buffer read-position
+// TODO read across block boundaries
 void lread(struct Log *log, char *buf, int count)
 {
 	memcpy(buf, log->buf + (log->roffset % BSIZE), count);
 	log->roffset += count;
+}
+
+int parse_rheader(const char *buf, struct RecordHeader *header)
+{
+	const char* bp = buf;
+	bp = readu32le(bp, &header->iseq);
+	bp = readu32le(bp, &header->irnd);
+	bp = readu32le(bp, &header->plen);
+	assert(bp - buf == HCRC_OFFSET);
+
+	// TODO verify header CRC
+
+	return 0;
+}
+
+int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
+{
+	char header_buf[RHEADER_SIZE];
+	lread(log, header_buf, RHEADER_SIZE);
+	parse_rheader(header_buf, rheader);
+	// TODO compute actual CRC and compare to the header
+	// TODO copy the record payload
+	return -1;
 }
 
 void lclose(struct Log log)
@@ -455,4 +478,9 @@ void print_header(struct Header header)
 	printhex("crc", (char *)&header.crc, sizeof(header.crc));
 	printf("================\n");
 	printf(COLOR_RESET);
+}
+
+void print_record(struct RecordHeader header, char *payload)
+{
+	// TODO
 }

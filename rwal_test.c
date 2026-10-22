@@ -17,6 +17,7 @@ void _parse_initialized_header()
 
 	TEST_ASSERT_EQUAL(0, parse_header(buf, &h));
 
+	TEST_ASSERT_EQUAL_STRING_LEN("RWL", h.magic, MAGIC_SIZE);
 	TEST_ASSERT_EQUAL(1, h.version);
 	TEST_ASSERT_EQUAL(0, h.iseq);
 	TEST_ASSERT_NOT_EQUAL(0, h.irnd);
@@ -229,6 +230,7 @@ int main()
 	RUN_TEST(_parse_header_invalid_magic);
 	RUN_TEST(_initialize_header);
 	RUN_TEST(_write_initialized_header);
+	// TODO parse record
 	RUN_TEST(_encode_rheader);
 	RUN_TEST(_readu32le);
 	RUN_TEST(_readu64le);

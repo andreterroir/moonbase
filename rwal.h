@@ -85,6 +85,7 @@ struct Header {
    */
 
 # define HCRC_OFFSET 12
+
 struct RecordHeader {
    /* 0: */		uint32_t iseq;	// incarnation sequence number
    /* 4: */		uint32_t irnd;	// random incarnation salt
@@ -94,7 +95,7 @@ struct RecordHeader {
    /* 20:		plen bytes */
 };
 
-#define RHEADER_SIZE 20
+#define RHEADER_SIZE sizeof(struct RecordHeader)
 
 /*
    The header CRC checksum allows to detect when a record header was written
@@ -144,6 +145,7 @@ void lfsync(struct Log log);
 // TODO support logical record offset instead?
 void lrewind(struct Log *log, uint64_t offset);
 void lread(struct Log *log, char *buf, int count);
+int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf);
 // Discards the log data until the offset.
 void ltruncate(struct Log *log, uint64_t offset);
 // Fsync the log and free the resources.
