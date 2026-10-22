@@ -20,8 +20,16 @@
    HEADER LAYOUT
  */
 
+#define MAGIC_SIZE 3
+#define VERSION_SIZE 1
+#define IRND_SIZE 4
+#define IRND_OFFSET 8
+#define BLOCKS_OFFSET 12
+#define CRC_OFFSET 44
+#define HEADER_SIZE 48
+
 struct Header {
-	/* 0:		3b magic "RWL" */
+	/* 0:  */	char magic[MAGIC_SIZE];
 	/* 3:  */	uint8_t version;	// version (currently 1)
 	/* 4:  */	uint32_t iseq;		// incarnation sequence number
 	/* 8:  */	uint32_t irnd;		// random incarnation salt
@@ -32,14 +40,6 @@ struct Header {
 	/* 44: */	uint32_t crc;		// CRC32C covering bytes [0..44)
 	/* 48:		zero padding until the end of the block */
 };
-
-#define MAGIC_SIZE 3
-#define VERSION_SIZE 1
-#define IRND_SIZE 4
-#define IRND_OFFSET 8
-#define BLOCKS_OFFSET 12
-#define CRC_OFFSET 44
-#define HEADER_SIZE 48
 
 /*
    Multi-byte values are stored in little-endian byte order. Given that

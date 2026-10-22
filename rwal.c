@@ -210,6 +210,7 @@ int parse_header(const char *buf, struct Header *header)
 {
 	printhex("read magic", buf, MAGIC_SIZE);
 	if (strncmp(buf, init_header, MAGIC_SIZE) != 0) return -1;
+	memcpy(header->magic, buf, MAGIC_SIZE);
 
 	uint32_t crc = crc32c(buf, CRC_OFFSET);
 	buf += MAGIC_SIZE;
@@ -434,4 +435,24 @@ void printhex(const char *label, const char *buf, int count)
 		printf("0x%02X ", (unsigned char) buf[i]);
 	}
 	putchar('\n');
+}
+
+#define COLOR_GREEN "\x1b[32m"
+#define COLOR_RESET "\x1b[0m"
+
+void print_header(struct Header header)
+{
+	printf(COLOR_GREEN);
+	printf("===WAL Header===\n");
+	printf("magic: %3s\n", header.magic);
+	printf("iseq: %d\n", header.iseq);
+	printf("irnd: %d\n", header.irnd);
+	printf("blocks: %ld, (log size %ld bytes)\n", header.blocks,
+			header.blocks * BSIZE);
+	printf("ioffset: %ld\n", header.ioffset);
+	printf("soffset: %ld\n", header.soffset);
+	printf("eoffset: %ld\n", header.eoffset);
+	printhex("crc", (char *)&header.crc, sizeof(header.crc));
+	printf("================\n");
+	printf(COLOR_RESET);
 }

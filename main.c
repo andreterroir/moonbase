@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
 
 	struct Log log = lopen(argv[1]);
 
-	// TODO print log header
+	print_header(log.header);
 	// TODO print existing log records
 
 	printf("start offset: %lu, end offset: %lu\n",
