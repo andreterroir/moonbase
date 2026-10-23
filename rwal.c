@@ -180,10 +180,16 @@ int parse_rheader(const char *buf, struct RecordHeader *header)
 	bp = readu32le(bp, &header->iseq);
 	bp = readu32le(bp, &header->irnd);
 	bp = readu32le(bp, &header->plen);
-	assert(bp - buf == HCRC_OFFSET);
+	bp = readu32le(bp, &header->hcrc);
 
-	// TODO verify header CRC
+	uint32_t crc = crc32c(buf, HCRC_OFFSET);
+	if (header->hcrc != crc) {
+		return -1;
+	}
 
+	bp = readu32le(bp, &header->pcrc);
+
+	assert(bp - buf == RHEADER_SIZE);
 	return 0;
 }
 

@@ -158,6 +158,38 @@ void _encode_rheader()
 	TEST_ASSERT_EQUAL_HEX(0xD3B7F26Cu, val);
 }
 
+void _parse_rheader()
+{
+	char buf[RHEADER_SIZE];
+	char payload[] = { 0xBE, 0xC0, 0xFF, 0xEE };
+	int iseq = 5;
+	int irnd = 997;
+	int plen = sizeof(payload);
+	encode_rheader(buf, iseq, irnd, payload, plen);
+
+	struct RecordHeader header;
+	parse_rheader(buf, &header);
+
+	TEST_ASSERT_EQUAL(iseq, header.iseq);
+	TEST_ASSERT_EQUAL(irnd, header.irnd);
+	TEST_ASSERT_EQUAL(plen, header.plen);
+	TEST_ASSERT_EQUAL_HEX(0x57D1B283, header.hcrc);
+	TEST_ASSERT_EQUAL_HEX(0xB66E92FE, header.pcrc);
+}
+
+void _parse_rheader_invalid_crc()
+{
+	char buf[RHEADER_SIZE];
+	char payload[] = { 0xAB, 0xCD, 0xEF };
+	encode_rheader(buf, 3, 499, payload, sizeof(payload));
+
+	// mangle header CRC
+	writeu32le(buf + HCRC_OFFSET, 0x11223344);
+
+	struct RecordHeader header;
+	TEST_ASSERT_EQUAL(-1, parse_rheader(buf, &header));
+}
+
 void _readu32le()
 {
 	char bytes[4] = { 0x0F, 0x00, 0x00, 0xF0 };
@@ -230,8 +262,9 @@ int main()
 	RUN_TEST(_parse_header_invalid_magic);
 	RUN_TEST(_initialize_header);
 	RUN_TEST(_write_initialized_header);
-	// TODO parse record
 	RUN_TEST(_encode_rheader);
+	RUN_TEST(_parse_rheader);
+	RUN_TEST(_parse_rheader_invalid_crc);
 	RUN_TEST(_readu32le);
 	RUN_TEST(_readu64le);
 	RUN_TEST(_crc32c);
