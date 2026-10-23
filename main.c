@@ -28,8 +28,8 @@ int main(int argc, char *argv[])
 	lrewind(&log, log.header.soffset);
 	struct RecordHeader rheader;
 	char rbuf[MAX_RECORD];
-	while(lread_record(&log, &rheader, rbuf) != -1) {
-		print_record(rheader, rbuf);
+	for(int lsn = 0; lread_record(&log, &rheader, rbuf) != -1; lsn++) {
+		print_record(lsn, rheader, rbuf);
 	}
 
 	// TODO set the actually discovered eoffset

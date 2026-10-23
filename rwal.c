@@ -198,9 +198,17 @@ int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 	char header_buf[RHEADER_SIZE];
 	lread(log, header_buf, RHEADER_SIZE);
 	parse_rheader(header_buf, rheader);
-	// TODO compute actual CRC and compare to the header
-	// TODO copy the record payload
-	return -1;
+
+	lread(log, buf, rheader->plen);
+	int pcrc = crc32c(buf, rheader->plen);
+	if (rheader->pcrc != pcrc) {
+		printf("payload CRC mismatch at %ld: recorded 0x%02X, "
+				"computed 0x%02X\n",
+				log->roffset, rheader->pcrc, pcrc);
+		return -1;
+	}
+
+	return 0;
 }
 
 void lclose(struct Log log)
@@ -467,11 +475,13 @@ void printhex(const char *label, const char *buf, int count)
 }
 
 #define COLOR_GREEN "\x1b[32m"
+#define COLOR_BLUE "\x1b[34m"
+#define COLOR_MAGENTA "\x1b[35m"
 #define COLOR_RESET "\x1b[0m"
 
 void print_header(struct Header header)
 {
-	printf(COLOR_GREEN);
+	printf(COLOR_MAGENTA);
 	printf("===WAL Header===\n");
 	printf("magic: %3s\n", header.magic);
 	printf("iseq: %d\n", header.iseq);
@@ -486,7 +496,19 @@ void print_header(struct Header header)
 	printf(COLOR_RESET);
 }
 
-void print_record(struct RecordHeader header, char *payload)
+void print_record(int lsn, struct RecordHeader header, char *payload)
 {
-	// TODO
+	if (lsn & 1)
+		printf(COLOR_GREEN);
+	else
+		printf(COLOR_BLUE);
+	printf("--Record %06d-\n", lsn);
+	printf("iseq: %d\n", header.iseq);
+	printf("irnd: %d\n", header.irnd);
+	printf("plen: %d\n", header.plen);
+	printhex("hcrc", (char*)&header.hcrc, sizeof(header.hcrc));
+	printhex("pcrc", (char*)&header.pcrc, sizeof(header.pcrc));
+	printhex("payload", payload, header.plen);
+	printf("----------------\n");
+	printf(COLOR_RESET);
 }
