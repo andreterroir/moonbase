@@ -121,6 +121,7 @@ void encode_rheader(char *buf, uint32_t iseq, uint32_t irnd, const char *bytes, 
 
 void lappend_record(struct Log *log, char *payload, int count)
 {
+	assert(count > 0);
 	char hbuf[RHEADER_SIZE];
 	encode_rheader(hbuf, log->header.iseq, log->header.irnd, payload, count);
 	append(log->fd, log->buf, &log->header.eoffset, hbuf, RHEADER_SIZE);
@@ -129,6 +130,7 @@ void lappend_record(struct Log *log, char *payload, int count)
 
 void lappend(struct Log *log, char *data, int count)
 {
+	assert(count > 0);
 	if (log->roffset != -1) {
 		if (log->header.eoffset / BSIZE != log->roffset / BSIZE) {
 			// seek and refill the buffer if the write block differs from the
@@ -186,6 +188,8 @@ int parse_rheader(const char *buf, struct RecordHeader *header)
 	if (header->hcrc != crc) {
 		return -1;
 	}
+	assert(header->irnd != 0);
+	assert(header->plen != 0);
 
 	bp = readu32le(bp, &header->pcrc);
 
@@ -195,16 +199,32 @@ int parse_rheader(const char *buf, struct RecordHeader *header)
 
 int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 {
+	int64_t record_offset = log->roffset;
 	char header_buf[RHEADER_SIZE];
 	lread(log, header_buf, RHEADER_SIZE);
-	parse_rheader(header_buf, rheader);
+	// TODO move CRC check up here
+	if (parse_rheader(header_buf, rheader) == -1) {
+		printf("record header CRC mismatch at %ld\n", record_offset);
+		return -1;
+	}
+
+	if (log->header.iseq != rheader->iseq
+			|| log->header.irnd != rheader->irnd) {
+		printf("record incarnation mismatch at %ld: "
+				"expected (%u, 0x%08X), "
+				"actual (%u, 0x%08X)\n",
+				record_offset,
+				log->header.iseq, log->header.irnd,
+				rheader->iseq, rheader->irnd);
+		return -1;
+	}
 
 	lread(log, buf, rheader->plen);
 	int pcrc = crc32c(buf, rheader->plen);
 	if (rheader->pcrc != pcrc) {
 		printf("payload CRC mismatch at %ld: recorded 0x%02X, "
 				"computed 0x%02X\n",
-				log->roffset, rheader->pcrc, pcrc);
+				record_offset, rheader->pcrc, pcrc);
 		return -1;
 	}
 
@@ -255,7 +275,6 @@ int parse_header(const char *buf, struct Header *header)
 	buf += VERSION_SIZE;
 
 	buf = readu32le(buf, &header->iseq);
-	// TODO assert non-zero salt
 	buf = readu32le(buf, &header->irnd);
 	buf = readu64le(buf, &header->blocks);
 	buf = readu64le(buf, &header->ioffset);
@@ -268,6 +287,11 @@ int parse_header(const char *buf, struct Header *header)
 				"0x%02X\n", crc, header->crc);
 		exit(1);
 	}
+	assert(header->irnd != 0);
+	assert(header->blocks > 0);
+	assert(header->ioffset >= BSIZE);
+	assert(header->soffset >= header->ioffset);
+	assert(header->eoffset >= header->soffset);
 
 	return 0;
 }
@@ -296,6 +320,8 @@ const char* readu64le(const char *buf, uint64_t *i)
 
 uint32_t crc32c(const char *buf, int count)
 {
+	assert(count > 0);
+
 	unsigned char *ptr = (unsigned char*)buf;
 	const unsigned char *eptr = ptr + count;
 	uint32_t crc = 0xffffffffu;

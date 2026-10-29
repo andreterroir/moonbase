@@ -219,7 +219,6 @@ void _crc32c()
 	char beef[4] = { 0xde, 0xad, 0xbe, 0xef };
 	TEST_ASSERT_EQUAL_HEX32(0xF1DC778E, crc32c(beef, 4));
 
-	TEST_ASSERT_EQUAL_HEX32(0x0, crc32c(beef, 0));
 	char zero[1] = { 0x00 };
 	TEST_ASSERT_EQUAL_HEX32(0x527D5351, crc32c(zero, 1));
 
