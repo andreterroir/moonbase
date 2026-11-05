@@ -187,7 +187,9 @@ void _parse_rheader_invalid_crc()
 	writeu32le(buf + HCRC_OFFSET, 0x11223344);
 
 	struct RecordHeader header;
-	TEST_ASSERT_EQUAL(-1, parse_rheader(buf, &header));
+	parse_rheader(buf, &header);
+	// Parsing succeeds with invalid CRC, which must be verified separately.
+	TEST_ASSERT_EQUAL(sizeof(payload), header.plen);
 }
 
 void _readu32le()

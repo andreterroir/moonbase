@@ -176,25 +176,15 @@ void lread(struct Log *log, char *buf, int count)
 	log->roffset += count;
 }
 
-int parse_rheader(const char *buf, struct RecordHeader *header)
+void parse_rheader(const char *buf, struct RecordHeader *header)
 {
 	const char* bp = buf;
 	bp = readu32le(bp, &header->iseq);
 	bp = readu32le(bp, &header->irnd);
 	bp = readu32le(bp, &header->plen);
 	bp = readu32le(bp, &header->hcrc);
-
-	uint32_t crc = crc32c(buf, HCRC_OFFSET);
-	if (header->hcrc != crc) {
-		return -1;
-	}
-	assert(header->irnd != 0);
-	assert(header->plen != 0);
-
 	bp = readu32le(bp, &header->pcrc);
-
 	assert(bp - buf == RHEADER_SIZE);
-	return 0;
 }
 
 int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
@@ -202,11 +192,13 @@ int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 	int64_t record_offset = log->roffset;
 	char header_buf[RHEADER_SIZE];
 	lread(log, header_buf, RHEADER_SIZE);
-	// TODO move CRC check up here
-	if (parse_rheader(header_buf, rheader) == -1) {
+	uint32_t crc = crc32c(header_buf, HCRC_OFFSET);
+	if (rheader->hcrc != crc) {
 		printf("record header CRC mismatch at %ld\n", record_offset);
 		return -1;
 	}
+	assert(rheader->irnd != 0);
+	assert(rheader->plen != 0);
 
 	if (log->header.iseq != rheader->iseq
 			|| log->header.irnd != rheader->irnd) {
