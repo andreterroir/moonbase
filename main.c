@@ -23,9 +23,8 @@ int main(int argc, char *argv[])
 	srandom(ts.tv_nsec);
 
 	struct Log log = lopen(argv[1]);
-
 	print_header(log.header);
-	lrewind(&log, log.header.soffset);
+
 	struct RecordHeader rheader;
 	char rbuf[MAX_RECORD];
 	for(int lsn = 0; lread_record(&log, &rheader, rbuf) != -1; lsn++) {

@@ -1,7 +1,7 @@
 /main
 rwal_test
 a.out
-blockdev
+blockdev*
 readme.html
 core
 *.d

@@ -102,11 +102,16 @@ struct Log lopen(char *dev_path)
 		printf("written the log device header block\n");
 	}
 
-	// read the current block
-	bseek(fd, header.eoffset);
+	// read the block where the log starts
+	bseek(fd, header.soffset);
 	bread(fd, buf);
-
-	return (struct Log){ header, fd, buf };
+	return (struct Log){
+		header,
+		fd,
+		buf,
+		// log is open in read mode
+		header.soffset
+	};
 }
 
 void encode_rheader(char *buf, uint32_t iseq, uint32_t irnd, const char *bytes, int count)
@@ -194,7 +199,8 @@ int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 	lread(log, header_buf, RHEADER_SIZE);
 	uint32_t crc = crc32c(header_buf, HCRC_OFFSET);
 	if (rheader->hcrc != crc) {
-		printf("record header CRC mismatch at %ld\n", record_offset);
+		printf("record header CRC mismatch at %ld: recorded 0x%02X, "
+				"computed 0x%02X\n", record_offset, rheader->hcrc, crc);
 		return -1;
 	}
 	assert(rheader->irnd != 0);
