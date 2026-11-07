@@ -25,6 +25,7 @@ int main(int argc, char *argv[])
 	struct Log log = lopen(argv[1]);
 	print_header(log.header);
 
+	printf("reading existing records starting at %ld\n", log.roffset);
 	struct RecordHeader rheader;
 	char rbuf[MAX_RECORD];
 	for(int lsn = 0; lread_record(&log, &rheader, rbuf) != -1; lsn++) {

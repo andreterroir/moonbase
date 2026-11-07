@@ -197,6 +197,7 @@ int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 	int64_t record_offset = log->roffset;
 	char header_buf[RHEADER_SIZE];
 	lread(log, header_buf, RHEADER_SIZE);
+	parse_rheader(header_buf, rheader);
 	uint32_t crc = crc32c(header_buf, HCRC_OFFSET);
 	if (rheader->hcrc != crc) {
 		printf("record header CRC mismatch at %ld: recorded 0x%02X, "
@@ -509,7 +510,7 @@ void print_header(struct Header header)
 	printf("===WAL Header===\n");
 	printf("magic: %3s\n", header.magic);
 	printf("iseq: %d\n", header.iseq);
-	printf("irnd: %d\n", header.irnd);
+	printhex("irnd", (char *)&header.irnd, sizeof(header.irnd));
 	printf("blocks: %ld, (log size %ld bytes)\n", header.blocks,
 			header.blocks * BSIZE);
 	printf("ioffset: %ld\n", header.ioffset);
