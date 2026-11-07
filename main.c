@@ -8,6 +8,9 @@
 
 #define MAX_RECORD 1024
 
+// returns next LSN
+int read_records_from(struct Log *log, int lsn, uint64_t offset);
+
 int main(int argc, char *argv[])
 {
 	if (argc != 2) {
@@ -26,11 +29,7 @@ int main(int argc, char *argv[])
 	print_header(log.header);
 
 	printf("reading existing records starting at %ld\n", log.roffset);
-	struct RecordHeader rheader;
-	char rbuf[MAX_RECORD];
-	for(int lsn = 0; lread_record(&log, &rheader, rbuf) != -1; lsn++) {
-		print_record(lsn, rheader, rbuf);
-	}
+	int lsn = read_records_from(&log, 0/*lsn*/, log.roffset);
 
 	// TODO set the actually discovered eoffset
 
@@ -46,20 +45,28 @@ int main(int argc, char *argv[])
 	// read the records back
 	int record_len = RHEADER_SIZE + plen;
 	int record_offset = log.header.eoffset - 2 * record_len;
-	printf("reading records at %d\n", record_offset);
-	lrewind(&log, record_offset);
-	lread(&log, rbuf, record_len);
-	printhex("record 1", rbuf, record_len);
-	lread(&log, rbuf, record_len);
-	printhex("record 2", rbuf, record_len);
+	lsn = read_records_from(&log, lsn, record_offset);
 
 	// append and then read another record
 	char record3[] = { 0xc0, 0xff, 0xee };
 	lappend_record(&log, record3, sizeof(record3));
 	record_len = RHEADER_SIZE + sizeof(record3);
-	lrewind(&log, log.header.eoffset - record_len);
-	lread(&log, rbuf, record_len);
-	printhex("record 3", rbuf, record_len);
+	record_offset = log.header.eoffset - record_len;
+	lsn = read_records_from(&log, lsn, record_offset);
 
 	lclose(log);
+}
+
+int read_records_from(struct Log *log, int lsn, uint64_t offset)
+{
+	struct RecordHeader rheader;
+	char rbuf[MAX_RECORD];
+
+	if (offset != log->roffset) {
+		lrewind(log, offset);
+	}
+	while(lread_record(log, &rheader, rbuf) != -1) {
+		print_record(lsn++, rheader, rbuf);
+	}
+	return lsn;
 }
