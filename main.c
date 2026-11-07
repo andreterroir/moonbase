@@ -30,8 +30,7 @@ int main(int argc, char *argv[])
 
 	printf("reading existing records starting at %ld\n", log.roffset);
 	int lsn = read_records_from(&log, 0/*lsn*/, log.roffset);
-
-	// TODO set the actually discovered eoffset
+	printf("roffset: %ld, eoffset: %ld\n", log.roffset, log.header.eoffset);
 
 	// append two records
 	char record1[] = { 0xde, 0xad, 0xbe, 0xef };
@@ -53,8 +52,12 @@ int main(int argc, char *argv[])
 	record_len = RHEADER_SIZE + sizeof(record3);
 	record_offset = log.header.eoffset - record_len;
 	lsn = read_records_from(&log, lsn, record_offset);
+	printf("roffset: %ld, eoffset: %ld\n", log.roffset, log.header.eoffset);
 
-	lclose(log);
+	// Simulate a crash after a successfully completed append but without
+	// flushing the log header.
+	lfsync(log);
+	// lclose(log);
 }
 
 int read_records_from(struct Log *log, int lsn, uint64_t offset)

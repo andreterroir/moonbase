@@ -129,14 +129,19 @@ void lappend_record(struct Log *log, char *payload, int count)
 	assert(count > 0);
 	char hbuf[RHEADER_SIZE];
 	encode_rheader(hbuf, log->header.iseq, log->header.irnd, payload, count);
-	append(log->fd, log->buf, &log->header.eoffset, hbuf, RHEADER_SIZE);
-	append(log->fd, log->buf, &log->header.eoffset, payload, count);
+	lappend(log, hbuf, RHEADER_SIZE);
+	lappend(log, payload, count);
 }
 
+// TODO enforce discovery of the log tail, before allowing the first append.
 void lappend(struct Log *log, char *data, int count)
 {
 	assert(count > 0);
 	if (log->roffset != -1) {
+		if (log->roffset > log->header.eoffset) {
+			printf("advancing log tail from %ld to discovered %ld\n",
+					log->header.eoffset, log->roffset);
+		}
 		if (log->header.eoffset / BSIZE != log->roffset / BSIZE) {
 			// seek and refill the buffer if the write block differs from the
 			// read block
@@ -153,10 +158,12 @@ void lfsync(struct Log log)
 	// flush the current block if not full
 	// a full block is flushed on append
 	if (log.header.eoffset % BSIZE != 0) {
+		printf("persisting log until %ld\n", log.header.eoffset);
+		bseek(log.fd, log.header.eoffset);
 		bwrite(log.fd, log.buf);
 	}
 
-	if (fsync(log.fd) == -11) {
+	if (fsync(log.fd) == -1) {
 		perror("lfscyn");
 		exit(1);
 	}
@@ -202,6 +209,7 @@ int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 	if (rheader->hcrc != crc) {
 		printf("record header CRC mismatch at %ld: recorded 0x%02X, "
 				"computed 0x%02X\n", record_offset, rheader->hcrc, crc);
+		log->roffset -= RHEADER_SIZE;
 		return -1;
 	}
 	assert(rheader->irnd != 0);
@@ -215,6 +223,7 @@ int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 				record_offset,
 				log->header.iseq, log->header.irnd,
 				rheader->iseq, rheader->irnd);
+		log->roffset -= RHEADER_SIZE;
 		return -1;
 	}
 
@@ -224,6 +233,7 @@ int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 		printf("payload CRC mismatch at %ld: recorded 0x%02X, "
 				"computed 0x%02X\n",
 				record_offset, rheader->pcrc, pcrc);
+		log->roffset -= RHEADER_SIZE + rheader->plen;
 		return -1;
 	}
 
@@ -430,6 +440,7 @@ void bread(int fd, char *buf)
 
 // Write one block of data from buf (BSIZE bytes) to fd. The buffer size is
 // assumed to be at least BSIZE.
+// TODO enforce invariant that the seek position is at the beginning of the block.
 void bwrite(int fd, char *buf)
 {
 	ssize_t bytes_written = write(fd, buf, BSIZE);
