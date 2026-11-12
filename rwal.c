@@ -141,6 +141,7 @@ void lappend(struct Log *log, char *data, int count)
 		if (log->roffset > log->header.eoffset) {
 			printf("advancing log tail from %ld to discovered %ld\n",
 					log->header.eoffset, log->roffset);
+			log->header.eoffset = log->roffset;
 		}
 		if (log->header.eoffset / BSIZE != log->roffset / BSIZE) {
 			// seek and refill the buffer if the write block differs from the
