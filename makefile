@@ -6,7 +6,7 @@ CFLAGS ?= -Wall -march=native
 OBJECTS := main.o rwal.o rwal_test.o unity/unity.o
 DEPS := $(OBJECTS:.o=.d)
 
-.PHONY: test clean loopdev FORCE
+.PHONY: test clean blockdev loopdev FORCE
 
 main: main.o rwal.o
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
