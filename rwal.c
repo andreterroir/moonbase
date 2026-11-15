@@ -453,6 +453,7 @@ void bwrite(int fd, char *buf)
 }
 
 // Seek over to the start of the current block.
+// Q is lseek no-op if already at the offset?
 void bseek(int fd, off_t offset)
 {
 	if (lseek(fd, offset / BSIZE * BSIZE, SEEK_SET) == -1) {
@@ -462,22 +463,24 @@ void bseek(int fd, off_t offset)
 }
 
 // Append count bytes to fd at offset. The buffer is assumed to already contain
-// the data up to offset % BSIZE and have the size of exactly BSIZE. When
-// the buffer is filled in, it's written to the device. A partially filled
-// buffer remains not flushed.
+// the data up to offset % BSIZE and have the size of exactly BSIZE. The buffer
+// is is flushed (but not fsynced) when full. A partially filled buffer remains
+// not flushed.
 void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 {
 	// fill the rest of the buffer
 	ssize_t buf_offset = *offset % BSIZE;
 	ssize_t buf_free = BSIZE - buf_offset;
 	assert(buf_offset + buf_free == BSIZE);
-	ssize_t to_copy = count % (buf_free + 1); // up to buf_free bytes
+	// up to buf_free bytes
+	ssize_t to_copy = count < buf_free ? count: buf_free;
 	assert(buf_offset + to_copy <= BSIZE);
 	memcpy(buf + buf_offset, bytes, to_copy);
 	printf("to_copy: %ld at buf_offset: %ld, buf_free: %ld\n", to_copy,
 			buf_offset, buf_free);
 	// flush the buffer if full
 	if (buf_free == to_copy) {
+		// TODO maintain seek position during appends
 		bseek(fd, *offset);
 		bwrite(fd, buf);
 	}
@@ -487,7 +490,8 @@ void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 	count -= to_copy;
 	bytes += to_copy;
 
-	// writes bytes in BSIZE chunks to directly to disk
+	// writes bytes in BSIZE chunks to disk
+	// TODO while(bytes < buf + count)
 	while (count / BSIZE > 0) {
 		bwrite(fd, bytes);
 		count -= BSIZE;

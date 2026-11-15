@@ -256,6 +256,21 @@ void _crc32c()
 	}
 }
 
+void _append_within_block()
+{
+	// TODO
+}
+
+void _append_next_block_spill()
+{
+	// TODO
+}
+
+void _append_multiple_blocks()
+{
+	// TODO
+}
+
 int main()
 {
 	UNITY_BEGIN();
@@ -269,5 +284,8 @@ int main()
 	RUN_TEST(_readu32le);
 	RUN_TEST(_readu64le);
 	RUN_TEST(_crc32c);
+	RUN_TEST(_append_within_block);
+	RUN_TEST(_append_next_block_spill);
+	RUN_TEST(_append_multiple_blocks);
 	return UNITY_END();
 }
