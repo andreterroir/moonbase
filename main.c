@@ -62,6 +62,7 @@ int main(int argc, char *argv[])
 
 int read_records_from(struct Log *log, int lsn, uint64_t offset)
 {
+	printf("reading records at %ld starting from %d\n", offset, lsn);
 	struct RecordHeader rheader;
 	char rbuf[MAX_RECORD];
 

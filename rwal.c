@@ -182,11 +182,24 @@ void lrewind(struct Log *log, uint64_t offset)
 	}
 }
 
-// TODO read across block boundaries
 void lread(struct Log *log, char *buf, int count)
 {
-	memcpy(buf, log->buf + (log->roffset % BSIZE), count);
-	log->roffset += count;
+	while (count > 0) {
+		int buf_offset = log->roffset % BSIZE;
+		int buf_bytes = BSIZE - buf_offset;
+		int to_read = count < buf_bytes ? count : buf_bytes;
+		printf("to_read: %d at buf_offset: %d, buf_bytes: %d\n", to_read,
+			buf_offset, buf_bytes);
+		memcpy(buf, log->buf + buf_offset, to_read);
+		log->roffset += to_read;
+		count -= to_read;
+		buf += to_read;
+		//bseek(log->fd, log->roffset);
+		if (to_read == buf_bytes) {
+			bread(log->fd, log->buf);
+		}
+	}
+	assert(count == 0);
 }
 
 void parse_rheader(const char *buf, struct RecordHeader *header)
@@ -456,10 +469,14 @@ void bwrite(int fd, char *buf)
 // Q is lseek no-op if already at the offset?
 void bseek(int fd, off_t offset)
 {
-	if (lseek(fd, offset / BSIZE * BSIZE, SEEK_SET) == -1) {
+	off_t block_offset = offset / BSIZE * BSIZE;
+	off_t new_offset = lseek(fd, block_offset, SEEK_SET);
+	if (new_offset == -1) {
 		perror("bseek");
 		exit(1);
 	}
+	printf("seek offset: %ld\n", new_offset);
+	assert(new_offset == block_offset);
 }
 
 // Append count bytes to fd at offset. The buffer is assumed to already contain
@@ -479,8 +496,10 @@ void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 	printf("to_copy: %ld at buf_offset: %ld, buf_free: %ld\n", to_copy,
 			buf_offset, buf_free);
 	// flush the buffer if full
-	if (buf_free == to_copy) {
+	if (to_copy == buf_free) {
+		printf("flushing the block for offset %ld\n", *offset);
 		// TODO maintain seek position during appends
+		// FIXME the *previous* block must be persisted
 		bseek(fd, *offset);
 		bwrite(fd, buf);
 	}
@@ -545,7 +564,7 @@ void print_record(int lsn, struct RecordHeader header, char *payload)
 		printf(COLOR_BLUE);
 	printf("--Record %06d-\n", lsn);
 	printf("iseq: %d\n", header.iseq);
-	printf("irnd: %d\n", header.irnd);
+	printhex("irnd", (char*)&header.irnd, sizeof(header.irnd));
 	printf("plen: %d\n", header.plen);
 	printhex("hcrc", (char*)&header.hcrc, sizeof(header.hcrc));
 	printhex("pcrc", (char*)&header.pcrc, sizeof(header.pcrc));
