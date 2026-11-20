@@ -175,6 +175,7 @@ void lrewind(struct Log *log, uint64_t offset)
 {
 	log->roffset = offset;
 	if (offset / BSIZE != log->header.eoffset / BSIZE) {
+		printf("rewinding to %ld\n", offset);
 		bseek(log->fd, log->header.eoffset);
 		bwrite(log->fd, log->buf);
 		bseek(log->fd, offset);
@@ -194,8 +195,8 @@ void lread(struct Log *log, char *buf, int count)
 		log->roffset += to_read;
 		count -= to_read;
 		buf += to_read;
-		//bseek(log->fd, log->roffset);
 		if (to_read == buf_bytes) {
+			bseek(log->fd, log->roffset);
 			bread(log->fd, log->buf);
 		}
 	}
@@ -457,6 +458,7 @@ void bread(int fd, char *buf)
 // TODO enforce invariant that the seek position is at the beginning of the block.
 void bwrite(int fd, char *buf)
 {
+	printf("writing out buffer\n");
 	ssize_t bytes_written = write(fd, buf, BSIZE);
 	if (bytes_written == -1) {
 		perror("bwrite");
@@ -498,10 +500,9 @@ void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 	// flush the buffer if full
 	if (to_copy == buf_free) {
 		printf("flushing the block for offset %ld\n", *offset);
-		// TODO maintain seek position during appends
-		// FIXME the *previous* block must be persisted
 		bseek(fd, *offset);
 		bwrite(fd, buf);
+		memset(buf, 0, BSIZE);
 	}
 
 	*offset += count; // the final offset
@@ -519,6 +520,7 @@ void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 
 	// buffer the remaining data if any
 	if (count > 0) {
+		printf("buffering %d bytes for the next block\n", count);
 		memset(buf, 0, BSIZE);
 		memcpy(buf, bytes, count);
 	}
@@ -556,13 +558,13 @@ void print_header(struct Header header)
 	printf(COLOR_RESET);
 }
 
-void print_record(int lsn, struct RecordHeader header, char *payload)
+void print_record(int offset, int lsn, struct RecordHeader header, char *payload)
 {
 	if (lsn & 1)
 		printf(COLOR_GREEN);
 	else
 		printf(COLOR_BLUE);
-	printf("--Record %06d-\n", lsn);
+	printf("--Record %6d:%06d-\n", offset, lsn);
 	printf("iseq: %d\n", header.iseq);
 	printhex("irnd", (char*)&header.irnd, sizeof(header.irnd));
 	printf("plen: %d\n", header.plen);

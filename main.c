@@ -70,7 +70,8 @@ int read_records_from(struct Log *log, int lsn, uint64_t offset)
 		lrewind(log, offset);
 	}
 	while(lread_record(log, &rheader, rbuf) != -1) {
-		print_record(lsn++, rheader, rbuf);
+		int record_offset = log->roffset - RHEADER_SIZE - rheader.plen;
+		print_record(record_offset, lsn++, rheader, rbuf);
 	}
 	return lsn;
 }
