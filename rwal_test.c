@@ -1,5 +1,7 @@
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "rwal.h"
 #include "rwal_internal.h"
 #include "unity/unity.h"
@@ -263,7 +265,78 @@ void _append_within_block()
 
 void _append_next_block_spill()
 {
-	// TODO
+	// A failed read of a record header straddling the block boundary
+	// must leave the single buffer holding the rolled-back block, so
+	// the following append fills the rest of that block instead of
+	// flushing a foreign block over it.
+	const int nblocks = 4;
+	char path[] = "/tmp/rwal-test-XXXXXX";
+	int fd = mkstemp(path);
+	TEST_ASSERT_NOT_EQUAL(-1, fd);
+	TEST_ASSERT_EQUAL(0, ftruncate(fd, nblocks * BSIZE));
+	for (int i = 0; i < nblocks; i++) {
+		char z[BSIZE];
+		memset(z, 0, sizeof z);
+		TEST_ASSERT_EQUAL(BSIZE, pwrite(fd, z, sizeof z, i * BSIZE));
+	}
+
+	char block[BSIZE];
+	memset(block, 0, sizeof block);
+	int pos = 0;
+	const uint32_t iseq = 7, irnd = 0x12345678;
+	for (int i = 0; i < 10; i++) {
+		char payload[388];
+		memset(payload, 0xA0 + i, sizeof payload);
+		encode_rheader(block + pos, iseq, irnd, payload, sizeof payload);
+		memcpy(block + pos + RHEADER_SIZE, payload, sizeof payload);
+		pos += RHEADER_SIZE + sizeof payload;
+	}
+	TEST_ASSERT_EQUAL(4080, pos);
+	TEST_ASSERT_EQUAL(BSIZE, pwrite(fd, block, sizeof block, BSIZE));
+
+	struct Log log;
+	memset(&log.header, 0, sizeof log.header);
+	log.header.iseq = iseq;
+	log.header.irnd = irnd;
+	log.header.blocks = nblocks;
+	log.header.ioffset = BSIZE;
+	log.header.soffset = BSIZE;
+	log.header.eoffset = BSIZE; // stale, everything is discovered
+	log.fd = fd;
+	log.buf = aligned_alloc(4096, BSIZE);
+	TEST_ASSERT_NOT_NULL(log.buf);
+	TEST_ASSERT_EQUAL(BSIZE, pread(fd, log.buf, BSIZE, BSIZE));
+	log.roffset = BSIZE;
+
+	struct RecordHeader rheader;
+	char payload[4096];
+	int n = 0;
+	while (lread_record(&log, &rheader, payload) != -1)
+		n++;
+	TEST_ASSERT_EQUAL(10, n);
+
+	char new_record[] = { 0xde, 0xad, 0xbe, 0xef };
+	lappend_record(&log, new_record, sizeof new_record);
+	lfsync(log);
+
+	char reread[BSIZE];
+	TEST_ASSERT_EQUAL(BSIZE, pread(fd, reread, BSIZE, BSIZE));
+	TEST_ASSERT_EQUAL_MEMORY(block, reread, 4080);
+
+	struct Log fresh = log;
+	fresh.buf = aligned_alloc(4096, BSIZE);
+	TEST_ASSERT_NOT_NULL(fresh.buf);
+	TEST_ASSERT_EQUAL(BSIZE, pread(fd, fresh.buf, BSIZE, BSIZE));
+	fresh.roffset = BSIZE;
+	n = 0;
+	while (lread_record(&fresh, &rheader, payload) != -1)
+		n++;
+	TEST_ASSERT_EQUAL(11, n);
+
+	free(log.buf);
+	free(fresh.buf);
+	close(fd);
+	unlink(path);
 }
 
 void _append_multiple_blocks()
