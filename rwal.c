@@ -171,6 +171,10 @@ void lfsync(struct Log log)
 }
 
 // Set the offset for subsequent reads and fill the buffer.
+// In append mode (roffset == -1) the buffer holds the dirty eoffset
+// block, which must be persisted before buffering another block.
+// In read mode the buffer holds a clean block already on disk, so
+// rewinding only discards it.
 void lrewind(struct Log *log, uint64_t offset)
 {
 	uint64_t curr_offset = log->roffset != -1 ? log->roffset : log->header.eoffset;
