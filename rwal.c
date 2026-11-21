@@ -173,14 +173,18 @@ void lfsync(struct Log log)
 // Set the offset for subsequent reads and fill the buffer.
 void lrewind(struct Log *log, uint64_t offset)
 {
-	log->roffset = offset;
-	if (offset / BSIZE != log->header.eoffset / BSIZE) {
-		printf("rewinding to %ld\n", offset);
-		bseek(log->fd, log->header.eoffset);
-		bwrite(log->fd, log->buf);
+	uint64_t curr_offset = log->roffset != -1 ? log->roffset : log->header.eoffset;
+	if (offset / BSIZE != curr_offset / BSIZE) {
+		// the current block must be persisted first, unless in read mode
+		if (log->roffset == -1) {
+			bseek(log->fd, log->header.eoffset);
+			bwrite(log->fd, log->buf);
+		}
+		// buffer the current block
 		bseek(log->fd, offset);
 		bread(log->fd, log->buf);
 	}
+	log->roffset = offset;
 }
 
 void lread(struct Log *log, char *buf, int count)
@@ -224,7 +228,7 @@ int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 	if (rheader->hcrc != crc) {
 		printf("record header CRC mismatch at %ld: recorded 0x%02X, "
 				"computed 0x%02X\n", record_offset, rheader->hcrc, crc);
-		log->roffset -= RHEADER_SIZE;
+		lrewind(log, log->roffset - RHEADER_SIZE);
 		return -1;
 	}
 	assert(rheader->irnd != 0);
@@ -238,7 +242,7 @@ int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 				record_offset,
 				log->header.iseq, log->header.irnd,
 				rheader->iseq, rheader->irnd);
-		log->roffset -= RHEADER_SIZE;
+		lrewind(log, log->roffset - RHEADER_SIZE);
 		return -1;
 	}
 
@@ -248,7 +252,7 @@ int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 		printf("payload CRC mismatch at %ld: recorded 0x%02X, "
 				"computed 0x%02X\n",
 				record_offset, rheader->pcrc, pcrc);
-		log->roffset -= RHEADER_SIZE + rheader->plen;
+		lrewind(log, log->roffset - RHEADER_SIZE - rheader->plen);
 		return -1;
 	}
 
@@ -564,7 +568,7 @@ void print_record(int offset, int lsn, struct RecordHeader header, char *payload
 		printf(COLOR_GREEN);
 	else
 		printf(COLOR_BLUE);
-	printf("--Record %6d:%06d-\n", offset, lsn);
+	printf("-- %-6d: record %06d-\n", offset, lsn);
 	printf("iseq: %d\n", header.iseq);
 	printhex("irnd", (char*)&header.irnd, sizeof(header.irnd));
 	printf("plen: %d\n", header.plen);
