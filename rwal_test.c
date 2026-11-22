@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
@@ -273,25 +274,25 @@ void _append_next_block_spill()
 	char path[] = "/tmp/rwal-test-XXXXXX";
 	int fd = mkstemp(path);
 	TEST_ASSERT_NOT_EQUAL(-1, fd);
+	// the extended area - whole file here - is zero-filled
 	TEST_ASSERT_EQUAL(0, ftruncate(fd, nblocks * BSIZE));
-	for (int i = 0; i < nblocks; i++) {
-		char z[BSIZE];
-		memset(z, 0, sizeof z);
-		TEST_ASSERT_EQUAL(BSIZE, pwrite(fd, z, sizeof z, i * BSIZE));
-	}
 
 	char block[BSIZE];
 	memset(block, 0, sizeof block);
 	int pos = 0;
 	const uint32_t iseq = 7, irnd = 0x12345678;
-	for (int i = 0; i < 10; i++) {
-		char payload[388];
+	int plen = 388;
+	int rcount = 10;
+	for (int i = 0; i < rcount; i++) {
+		char payload[plen];
 		memset(payload, 0xA0 + i, sizeof payload);
 		encode_rheader(block + pos, iseq, irnd, payload, sizeof payload);
 		memcpy(block + pos + RHEADER_SIZE, payload, sizeof payload);
 		pos += RHEADER_SIZE + sizeof payload;
 	}
-	TEST_ASSERT_EQUAL(4080, pos);
+	int existing_bytes = (RHEADER_SIZE + plen) * rcount;
+	assert(existing_bytes == 4080);
+	TEST_ASSERT_EQUAL(existing_bytes, pos);
 	TEST_ASSERT_EQUAL(BSIZE, pwrite(fd, block, sizeof block, BSIZE));
 
 	struct Log log;
@@ -313,7 +314,7 @@ void _append_next_block_spill()
 	int n = 0;
 	while (lread_record(&log, &rheader, payload) != -1)
 		n++;
-	TEST_ASSERT_EQUAL(10, n);
+	TEST_ASSERT_EQUAL(rcount, n);
 
 	char new_record[] = { 0xde, 0xad, 0xbe, 0xef };
 	lappend_record(&log, new_record, sizeof new_record);
@@ -321,7 +322,8 @@ void _append_next_block_spill()
 
 	char reread[BSIZE];
 	TEST_ASSERT_EQUAL(BSIZE, pread(fd, reread, BSIZE, BSIZE));
-	TEST_ASSERT_EQUAL_MEMORY(block, reread, 4080);
+	// the already existing records are preserved after append
+	TEST_ASSERT_EQUAL_MEMORY(block, reread, existing_bytes);
 
 	struct Log fresh = log;
 	fresh.buf = aligned_alloc(4096, BSIZE);
@@ -329,9 +331,14 @@ void _append_next_block_spill()
 	TEST_ASSERT_EQUAL(BSIZE, pread(fd, fresh.buf, BSIZE, BSIZE));
 	fresh.roffset = BSIZE;
 	n = 0;
-	while (lread_record(&fresh, &rheader, payload) != -1)
+	while (lread_record(&fresh, &rheader, payload) != -1) {
 		n++;
-	TEST_ASSERT_EQUAL(11, n);
+		if (n == rcount + 1) {
+			TEST_ASSERT_EQUAL_MEMORY(payload, new_record, rheader.plen);
+		}
+	}
+	// the newly appended record is readable
+	TEST_ASSERT_EQUAL(rcount + 1, n);
 
 	free(log.buf);
 	free(fresh.buf);
