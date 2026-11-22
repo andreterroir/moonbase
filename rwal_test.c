@@ -259,9 +259,64 @@ void _crc32c()
 	}
 }
 
-void _append_within_block()
+void _append_within_first_block()
 {
-	// TODO
+	const int nblocks = 2;
+	char path[] = "/tmp/rwal-test-XXXXXX";
+	int fd = mkstemp(path);
+	TEST_ASSERT_NOT_EQUAL(-1, fd);
+	// the extended area - whole file here - is zero-filled
+	TEST_ASSERT_EQUAL(0, ftruncate(fd, nblocks * BSIZE));
+
+	struct Log log;
+	memset(&log.header, 0, sizeof log.header);
+	const uint32_t iseq = 0, irnd = 0x12345678;
+	log.header.iseq = iseq;
+	log.header.irnd = irnd;
+	log.header.blocks = nblocks;
+	// start of the first data block
+	log.header.ioffset = BSIZE;
+	log.header.soffset = BSIZE;
+	log.header.eoffset = BSIZE;
+	log.fd = fd;
+	log.buf = aligned_alloc(4096, BSIZE);
+	log.roffset = -1; // append mode
+	TEST_ASSERT_NOT_NULL(log.buf);
+	TEST_ASSERT_EQUAL(BSIZE, pread(fd, log.buf, BSIZE, BSIZE));
+
+	char block[BSIZE];
+	memset(block, 0, sizeof block);
+
+	int plen = 69;
+	int rcount = 5;
+	int data_size = rcount * (RHEADER_SIZE + plen);
+	assert(data_size < BSIZE);
+	assert(data_size == 445);
+	for (int i = 0; i < rcount; i++) {
+		char payload[plen];
+		memset(payload, 0xF0 + i, sizeof payload);
+		lappend_record(&log, payload, sizeof payload);
+	}
+	lfsync(log);
+	// do not persist log header, let reads discover the data
+
+	// read the data via a new log instance
+	struct Log fresh = log;
+	fresh.buf = aligned_alloc(4096, BSIZE);
+	TEST_ASSERT_NOT_NULL(fresh.buf);
+	TEST_ASSERT_EQUAL(BSIZE, pread(fd, fresh.buf, BSIZE, BSIZE));
+	// start reads at the beginnning of the first data block
+	fresh.roffset = BSIZE;
+
+	int n = 0;
+	struct RecordHeader rheader;
+	char payload[plen];
+	while (lread_record(&fresh, &rheader, payload) != -1)
+		n++;
+	TEST_ASSERT_EQUAL(rcount, n);
+
+	free(log.buf);
+	free(fresh.buf);
 }
 
 void _append_next_block_spill()
@@ -274,7 +329,6 @@ void _append_next_block_spill()
 	char path[] = "/tmp/rwal-test-XXXXXX";
 	int fd = mkstemp(path);
 	TEST_ASSERT_NOT_EQUAL(-1, fd);
-	// the extended area - whole file here - is zero-filled
 	TEST_ASSERT_EQUAL(0, ftruncate(fd, nblocks * BSIZE));
 
 	char block[BSIZE];
@@ -364,7 +418,7 @@ int main()
 	RUN_TEST(_readu32le);
 	RUN_TEST(_readu64le);
 	RUN_TEST(_crc32c);
-	RUN_TEST(_append_within_block);
+	RUN_TEST(_append_within_first_block);
 	RUN_TEST(_append_next_block_spill);
 	RUN_TEST(_append_multiple_blocks);
 	return UNITY_END();

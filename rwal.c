@@ -224,6 +224,7 @@ void parse_rheader(const char *buf, struct RecordHeader *header)
 
 int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 {
+	assert(log->roffset != -1); // log must be set to read mode via lrewind
 	int64_t record_offset = log->roffset;
 	char header_buf[RHEADER_SIZE];
 	lread(log, header_buf, RHEADER_SIZE);
