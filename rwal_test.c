@@ -292,7 +292,6 @@ void _append_within_first_block()
 	int rcount = 5;
 	int data_size = rcount * (RHEADER_SIZE + plen);
 	assert(data_size < BSIZE);
-	assert(data_size == 445);
 	for (int i = 0; i < rcount; i++) {
 		char payload[plen];
 		memset(payload, 0xF0 + i, sizeof payload);
@@ -321,7 +320,7 @@ void _append_within_first_block()
 	close(fd);
 }
 
-void _append_next_block_spill()
+void _append_split_header()
 {
 	// A failed read of a record header straddling the block boundary
 	// must leave the single buffer holding the rolled-back block, so
@@ -348,7 +347,8 @@ void _append_next_block_spill()
 		pos += RHEADER_SIZE + sizeof payload;
 	}
 	int existing_bytes = (RHEADER_SIZE + plen) * rcount;
-	assert(existing_bytes == 4080);
+	// the header of the next appended record is split across blocks
+	assert(existing_bytes + RHEADER_SIZE > BSIZE);
 	TEST_ASSERT_EQUAL(existing_bytes, pos);
 	TEST_ASSERT_EQUAL(BSIZE, pwrite(fd, block, sizeof block, BSIZE));
 
@@ -402,7 +402,17 @@ void _append_next_block_spill()
 	close(fd);
 }
 
-void _append_multiple_blocks()
+void _append_split_payload()
+{
+	// TODO
+}
+
+void _append_multiblock_payload()
+{
+	// TODO
+}
+
+void _append_across_multiple_blocks()
 {
 	// TODO
 }
@@ -421,7 +431,9 @@ int main()
 	RUN_TEST(_readu64le);
 	RUN_TEST(_crc32c);
 	RUN_TEST(_append_within_first_block);
-	RUN_TEST(_append_next_block_spill);
-	RUN_TEST(_append_multiple_blocks);
+	RUN_TEST(_append_split_header);
+	RUN_TEST(_append_split_payload);
+	RUN_TEST(_append_multiblock_payload);
+	RUN_TEST(_append_across_multiple_blocks);
 	return UNITY_END();
 }

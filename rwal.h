@@ -145,6 +145,8 @@ void lfsync(struct Log log);
 // TODO support logical record offset instead?
 void lrewind(struct Log *log, uint64_t offset);
 void lread(struct Log *log, char *buf, int count);
+// Read a record's header and payload at the current roffset.
+// buf must be large enough to hold the record payload, possibly exceeding BSIZE.
 int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf);
 // Discards the log data until the offset.
 void ltruncate(struct Log *log, uint64_t offset);
