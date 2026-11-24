@@ -318,6 +318,7 @@ void _append_within_first_block()
 
 	free(log.buf);
 	free(fresh.buf);
+	close(fd);
 }
 
 void _append_next_block_spill()
@@ -399,7 +400,6 @@ void _append_next_block_spill()
 	free(log.buf);
 	free(fresh.buf);
 	close(fd);
-	unlink(path);
 }
 
 void _append_multiple_blocks()
