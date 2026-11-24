@@ -264,6 +264,7 @@ void _append_within_first_block()
 	const int nblocks = 2;
 	char path[] = "/tmp/rwal-test-XXXXXX";
 	int fd = mkstemp(path);
+	unlink(path);
 	TEST_ASSERT_NOT_EQUAL(-1, fd);
 	// the extended area - whole file here - is zero-filled
 	TEST_ASSERT_EQUAL(0, ftruncate(fd, nblocks * BSIZE));
@@ -328,6 +329,7 @@ void _append_next_block_spill()
 	const int nblocks = 4;
 	char path[] = "/tmp/rwal-test-XXXXXX";
 	int fd = mkstemp(path);
+	unlink(path);
 	TEST_ASSERT_NOT_EQUAL(-1, fd);
 	TEST_ASSERT_EQUAL(0, ftruncate(fd, nblocks * BSIZE));
 
