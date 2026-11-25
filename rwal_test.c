@@ -450,6 +450,7 @@ void _append_split_payload()
 	while (lread_record(&fresh, &rheader, payload) != -1)
 		n++;
 	TEST_ASSERT_EQUAL(rcount, n);
+	TEST_ASSERT_EQUAL(BSIZE + data_size, fresh.roffset);
 
 	free(log.buf);
 	free(fresh.buf);
@@ -458,12 +459,57 @@ void _append_split_payload()
 
 void _append_multiblock_payload()
 {
-	// TODO
-}
+	const int nblocks = 10; // 9 data blocks
+	char path[] = "/tmp/rwal-test-XXXXXX";
+	int fd = mkstemp(path);
+	unlink(path);
+	TEST_ASSERT_NOT_EQUAL(-1, fd);
+	TEST_ASSERT_EQUAL(0, ftruncate(fd, nblocks * BSIZE));
 
-void _append_across_multiple_blocks()
-{
-	// TODO
+	struct Log log;
+	memset(&log.header, 0, sizeof log.header);
+	const uint32_t iseq = 0, irnd = 0x12345678;
+	log.header.iseq = iseq;
+	log.header.irnd = irnd;
+	log.header.blocks = nblocks;
+	// start of the first data block
+	log.header.ioffset = BSIZE;
+	log.header.soffset = BSIZE;
+	log.header.eoffset = BSIZE;
+	log.fd = fd;
+	log.buf = aligned_alloc(4096, BSIZE);
+	log.roffset = -1; // append mode
+	TEST_ASSERT_NOT_NULL(log.buf);
+	TEST_ASSERT_EQUAL(BSIZE, pread(fd, log.buf, BSIZE, BSIZE));
+
+	int plen = 8800; // more than two blocks
+	int rcount = 3;
+	int data_size = rcount * (RHEADER_SIZE + plen);
+	assert(data_size < BSIZE * nblocks);
+	for (int i = 0; i < rcount; i++) {
+		char payload[plen];
+		memset(payload, 0xC0 + i, sizeof payload);
+		lappend_record(&log, payload, sizeof payload);
+	}
+	lfsync(log);
+
+	struct Log fresh = log;
+	fresh.buf = aligned_alloc(4096, BSIZE);
+	TEST_ASSERT_NOT_NULL(fresh.buf);
+	TEST_ASSERT_EQUAL(BSIZE, pread(fd, fresh.buf, BSIZE, BSIZE));
+	fresh.roffset = BSIZE;
+
+	int n = 0;
+	struct RecordHeader rheader;
+	char payload[plen];
+	while (lread_record(&fresh, &rheader, payload) != -1)
+		n++;
+	TEST_ASSERT_EQUAL(rcount, n);
+	TEST_ASSERT_EQUAL(BSIZE + data_size, fresh.roffset);
+
+	free(log.buf);
+	free(fresh.buf);
+	close(fd);
 }
 
 int main()
@@ -483,6 +529,5 @@ int main()
 	RUN_TEST(_append_split_header);
 	RUN_TEST(_append_split_payload);
 	RUN_TEST(_append_multiblock_payload);
-	RUN_TEST(_append_across_multiple_blocks);
 	return UNITY_END();
 }
