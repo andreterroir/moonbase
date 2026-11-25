@@ -196,9 +196,11 @@ void lread(struct Log *log, char *buf, int count)
 	while (count > 0) {
 		int buf_offset = log->roffset % BSIZE;
 		int buf_bytes = BSIZE - buf_offset;
+		assert(buf_offset + buf_bytes == BSIZE);
 		int to_read = count < buf_bytes ? count : buf_bytes;
 		printf("to_read: %d at buf_offset: %d, buf_bytes: %d\n", to_read,
 			buf_offset, buf_bytes);
+		assert(buf_offset + to_read <= BSIZE);
 		memcpy(buf, log->buf + buf_offset, to_read);
 		log->roffset += to_read;
 		count -= to_read;
@@ -518,6 +520,7 @@ void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 		count -= to_copy;
 		bytes += to_copy;
 	}
+	assert(count == 0);
 }
 
 void printhex(const char *label, const char *buf, int count)
