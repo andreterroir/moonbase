@@ -496,42 +496,27 @@ void bseek(int fd, off_t offset)
 // not flushed.
 void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 {
-	// fill the rest of the buffer
-	ssize_t buf_offset = *offset % BSIZE;
-	ssize_t buf_free = BSIZE - buf_offset;
-	assert(buf_offset + buf_free == BSIZE);
-	// up to buf_free bytes
-	ssize_t to_copy = count < buf_free ? count: buf_free;
-	assert(buf_offset + to_copy <= BSIZE);
-	memcpy(buf + buf_offset, bytes, to_copy);
-	printf("to_copy: %ld at buf_offset: %ld, buf_free: %ld\n", to_copy,
-			buf_offset, buf_free);
-	// flush the buffer if full
-	if (to_copy == buf_free) {
-		printf("flushing the block for offset %ld\n", *offset);
-		bseek(fd, *offset);
-		bwrite(fd, buf);
-		memset(buf, 0, BSIZE);
-	}
-
-	*offset += count; // the final offset
-
-	count -= to_copy;
-	bytes += to_copy;
-
-	// writes bytes in BSIZE chunks to disk
-	// TODO while(bytes < buf + count)
-	while (count / BSIZE > 0) {
-		bwrite(fd, bytes);
-		count -= BSIZE;
-		bytes += BSIZE;
-	}
-
-	// buffer the remaining data if any
-	if (count > 0) {
-		printf("buffering %d bytes for the next block\n", count);
-		memset(buf, 0, BSIZE);
-		memcpy(buf, bytes, count);
+	while (count > 0) {
+		// fill the rest of the buffer
+		ssize_t buf_offset = *offset % BSIZE;
+		ssize_t buf_free = BSIZE - buf_offset;
+		assert(buf_offset + buf_free == BSIZE);
+		// up to buf_free bytes
+		ssize_t to_copy = count < buf_free ? count: buf_free;
+		printf("to_copy: %ld at buf_offset: %ld, buf_free: %ld\n",
+				to_copy, buf_offset, buf_free);
+		assert(buf_offset + to_copy <= BSIZE);
+		memcpy(buf + buf_offset, bytes, to_copy);
+		// flush the buffer if full
+		if (to_copy == buf_free) {
+			printf("flushing the block for offset %ld\n", *offset);
+			bseek(fd, *offset);
+			bwrite(fd, buf);
+			memset(buf, 0, BSIZE);
+		}
+		*offset += to_copy;
+		count -= to_copy;
+		bytes += to_copy;
 	}
 }
 
