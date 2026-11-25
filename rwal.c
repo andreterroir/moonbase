@@ -492,7 +492,7 @@ void bseek(int fd, off_t offset)
 
 // Append count bytes to fd at offset. The buffer is assumed to already contain
 // the data up to offset % BSIZE and have the size of exactly BSIZE. The buffer
-// is is flushed (but not fsynced) when full. A partially filled buffer remains
+// is flushed (but not fsynced) when full. A partially filled buffer remains
 // not flushed.
 void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 {

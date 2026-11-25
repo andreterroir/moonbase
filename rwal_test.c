@@ -285,9 +285,6 @@ void _append_within_first_block()
 	TEST_ASSERT_NOT_NULL(log.buf);
 	TEST_ASSERT_EQUAL(BSIZE, pread(fd, log.buf, BSIZE, BSIZE));
 
-	char block[BSIZE];
-	memset(block, 0, sizeof block);
-
 	int plen = 69;
 	int rcount = 5;
 	int data_size = rcount * (RHEADER_SIZE + plen);
@@ -348,6 +345,7 @@ void _append_split_header()
 	}
 	int existing_bytes = (RHEADER_SIZE + plen) * rcount;
 	// the header of the next appended record is split across blocks
+	assert(existing_bytes < BSIZE);
 	assert(existing_bytes + RHEADER_SIZE > BSIZE);
 	TEST_ASSERT_EQUAL(existing_bytes, pos);
 	TEST_ASSERT_EQUAL(BSIZE, pwrite(fd, block, sizeof block, BSIZE));
@@ -404,7 +402,58 @@ void _append_split_header()
 
 void _append_split_payload()
 {
-	// TODO
+	const int nblocks = 4;
+	char path[] = "/tmp/rwal-test-XXXXXX";
+	int fd = mkstemp(path);
+	unlink(path);
+	TEST_ASSERT_NOT_EQUAL(-1, fd);
+	TEST_ASSERT_EQUAL(0, ftruncate(fd, nblocks * BSIZE));
+
+	struct Log log;
+	memset(&log.header, 0, sizeof log.header);
+	const uint32_t iseq = 0, irnd = 0x12345678;
+	log.header.iseq = iseq;
+	log.header.irnd = irnd;
+	log.header.blocks = nblocks;
+	// start of the first data block
+	log.header.ioffset = BSIZE;
+	log.header.soffset = BSIZE;
+	log.header.eoffset = BSIZE;
+	log.fd = fd;
+	log.buf = aligned_alloc(4096, BSIZE);
+	log.roffset = -1; // append mode
+	TEST_ASSERT_NOT_NULL(log.buf);
+	TEST_ASSERT_EQUAL(BSIZE, pread(fd, log.buf, BSIZE, BSIZE));
+
+	int plen = 512;
+	int rcount = 8;
+	int data_size = rcount * (RHEADER_SIZE + plen);
+	// payload is split across blocks
+	assert(data_size - plen < BSIZE);
+	assert(data_size > BSIZE);
+	for (int i = 0; i < rcount; i++) {
+		char payload[plen];
+		memset(payload, 0xE0 + i, sizeof payload);
+		lappend_record(&log, payload, sizeof payload);
+	}
+	lfsync(log);
+
+	struct Log fresh = log;
+	fresh.buf = aligned_alloc(4096, BSIZE);
+	TEST_ASSERT_NOT_NULL(fresh.buf);
+	TEST_ASSERT_EQUAL(BSIZE, pread(fd, fresh.buf, BSIZE, BSIZE));
+	fresh.roffset = BSIZE;
+
+	int n = 0;
+	struct RecordHeader rheader;
+	char payload[plen];
+	while (lread_record(&fresh, &rheader, payload) != -1)
+		n++;
+	TEST_ASSERT_EQUAL(rcount, n);
+
+	free(log.buf);
+	free(fresh.buf);
+	close(fd);
 }
 
 void _append_multiblock_payload()

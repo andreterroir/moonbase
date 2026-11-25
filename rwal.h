@@ -132,7 +132,7 @@ struct Log {
 struct Log lopen(char *dev_path);
 // Serialize payload into a record, computing the header.
 void lappend_record(struct Log *log, char *payload, int count);
-// Append alreday serialized record data directly.
+// Append already serialized record data directly.
 void lappend(struct Log *log, char *data, int count);
 // Append data from socket, assuming the header is appended already or is a
 // part of the data stream.
