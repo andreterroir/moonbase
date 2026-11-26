@@ -508,6 +508,12 @@ void append(int fd, char *buf, uint64_t *offset, char *bytes, int count)
 		printf("to_copy: %ld at buf_offset: %ld, buf_free: %ld\n",
 				to_copy, buf_offset, buf_free);
 		assert(buf_offset + to_copy <= BSIZE);
+		// The record payload is copied to the buffer first, which
+		// ensures the alignment requirements are specified, but is
+		// extra work. If this matters - e.g. object storage where
+		// typical records are large and occupy multiple blocks - an
+		// extra copy could be avoided by imposing alignment
+		// restrictions on the caller
 		memcpy(buf + buf_offset, bytes, to_copy);
 		// flush the buffer if full
 		if (to_copy == buf_free) {
