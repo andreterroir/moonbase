@@ -128,8 +128,25 @@ struct Log {
 	int64_t roffset;
 };
 
-// Open an existing or initialize a new log device.
+// Open an existing or initialize a new log. Once opened, the log data is
+// either processed in its entirety first before writing anything (e.g.
+// ARIES-style recovery in databases) or the log is directly appended to (e.g.
+// a message log where WAL is the primary storage). In both cases the head of
+// the log needs to be discovered first before any appends can be accepted.
+// eoffset in the log header is not updated on each append and is stale.
+// Replay combines reading of records starting from soffset with tail
+// discovery. Opening log in append mode minimizes the amount of data that
+// needs to be read to discover the tail by starting at eoffset and discarding
+// the record data.
+
+// Open the log for initial replay of record data.
+// struct Log lopen_read(char *dev_path);
+// Open the log directly for appending.
+// struct Log lopen_append(char *dev_path);
+
+// TODO migrate away from
 struct Log lopen(char *dev_path);
+
 // Serialize payload into a record, computing the header.
 void lappend_record(struct Log *log, char *payload, int count);
 // Append already serialized record data directly.
