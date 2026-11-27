@@ -35,7 +35,7 @@ void append(int fd, char *buf, uint64_t *offset, char *bytes, int count);
 
 // === Interface ===
 
-struct Log lopen(char *dev_path)
+struct Log lopen_read(char *dev_path)
 {
 	int fd = open(dev_path, O_RDWR | O_DIRECT);
 	if (fd == -1)

@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
 	}
 	srandom(ts.tv_nsec);
 
-	struct Log log = lopen(argv[1]);
+	struct Log log = lopen_read(argv[1]);
 	print_header(log.header);
 
 	printf("reading existing records starting at %ld\n", log.roffset);
