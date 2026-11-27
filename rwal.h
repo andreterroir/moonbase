@@ -142,7 +142,7 @@ struct Log {
 // Open the log for initial replay of record data.
 struct Log lopen_read(char *dev_path);
 // Open the log directly for appending.
-// struct Log lopen_append(char *dev_path);
+struct Log lopen_append(char *dev_path);
 
 // Serialize payload into a record, computing the header.
 void lappend_record(struct Log *log, char *payload, int count);

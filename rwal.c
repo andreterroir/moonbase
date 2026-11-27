@@ -27,6 +27,7 @@ const char init_header[HEADER_SIZE] = {
 	0xAA, 0xAA, 0xAA, 0xAA, // crc: placeholder
 };
 
+struct Log lopen(char *dev_path);
 void write_header(char *buf, struct Header header);
 void bread(int fd, char *buf);
 void bwrite(int fd, char *buf);
@@ -36,6 +37,33 @@ void append(int fd, char *buf, uint64_t *offset, char *bytes, int count);
 // === Interface ===
 
 struct Log lopen_read(char *dev_path)
+{
+	struct Log log = lopen(dev_path);
+
+	// start at the beginning of the log
+	log.roffset = log.header.soffset;
+	bseek(log.fd, log.roffset);
+	bread(log.fd, log.buf);
+
+	return log;
+}
+
+struct Log lopen_append(char *dev_path)
+{
+	struct Log log = lopen(dev_path);
+
+	// start at the last known log tail
+	log.roffset = log.header.eoffset;
+	// read the eoffset block
+	bseek(log.fd, log.roffset);
+	bread(log.fd, log.buf);
+
+	// TODO discover the actual log tail and prepare for append
+
+	return log;
+}
+
+struct Log lopen(char *dev_path)
 {
 	int fd = open(dev_path, O_RDWR | O_DIRECT);
 	if (fd == -1)
@@ -101,17 +129,7 @@ struct Log lopen_read(char *dev_path)
 
 		printf("written the log device header block\n");
 	}
-
-	// read the block where the log starts
-	bseek(fd, header.soffset);
-	bread(fd, buf);
-	return (struct Log){
-		header,
-		fd,
-		buf,
-		// log is open in read mode
-		header.soffset
-	};
+	return (struct Log){ header, fd, buf };
 }
 
 void encode_rheader(char *buf, uint32_t iseq, uint32_t irnd, const char *bytes, int count)
