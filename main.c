@@ -25,11 +25,11 @@ int main(int argc, char *argv[])
 	}
 	srandom(ts.tv_nsec);
 
-	struct Log log = lopen_read(argv[1]);
+	struct Log log = lopen_append(argv[1]);
 	print_header(log.header);
 
-	printf("reading existing records starting at %ld\n", log.roffset);
-	int lsn = read_records_from(&log, 0/*lsn*/, log.roffset);
+	printf("reading existing records starting at %ld\n", log.header.soffset);
+	int lsn = read_records_from(&log, 0/*lsn*/, log.header.soffset);
 	printf("roffset: %ld, eoffset: %ld\n", log.roffset, log.header.eoffset);
 
 	// append two records

@@ -58,8 +58,14 @@ struct Log lopen_append(char *dev_path)
 	bseek(log.fd, log.roffset);
 	bread(log.fd, log.buf);
 
-	// TODO discover the actual log tail and prepare for append
+	// discover the actual log tail
+	struct RecordHeader rheader;
+	char rbuf[RHEADER_SIZE];
+	while(lread_record(&log, &rheader, rbuf) != -1);
+	log.header.eoffset = log.roffset;
 
+	// leave read mode
+	log.roffset = -1;
 	return log;
 }
 
@@ -242,6 +248,10 @@ void parse_rheader(const char *buf, struct RecordHeader *header)
 	assert(bp - buf == RHEADER_SIZE);
 }
 
+// When no valid record is read (the return value is -1), the buffer is
+// guaranteed to hold the data of the block that contains the log tail (pointed
+// to by roffset).
+// TODO update eoffset on invalid read
 int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 {
 	assert(log->roffset != -1); // log must be set to read mode via lrewind
