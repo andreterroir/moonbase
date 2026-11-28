@@ -60,8 +60,30 @@ struct Log lopen_append(char *dev_path)
 
 	// discover the actual log tail
 	struct RecordHeader rheader;
-	char rbuf[RHEADER_SIZE];
-	while(lread_record(&log, &rheader, rbuf) != -1);
+	char rbuf[MAX_PAYLOAD];
+	while (1) {
+		int read_result = lread_record(&log, &rheader, rbuf);
+		if (read_result == 0)
+			continue; // skip over a valid record
+		else if (read_result == -1)
+			break; // the first invalid records marks the tail of the log
+		else if (read_result == -2) {
+			// the offset to rewind to if payload CRC verification fails
+			int64_t rewind_offset = log.roffset - (RHEADER_SIZE + MAX_PAYLOAD);
+			// process large payload in full
+			uint32_t crc = crc32c(rbuf, MAX_PAYLOAD);
+			for (int count = rheader.plen - MAX_PAYLOAD; count > 0; count -= MAX_PAYLOAD) {
+				int chunk_size = count < MAX_PAYLOAD ? count : MAX_PAYLOAD;
+				lread(&log, rbuf, chunk_size);
+				crc = crc32c_ext(crc, rbuf, chunk_size);
+			}
+			if (crc != rheader.pcrc) {
+				lrewind(&log, rewind_offset);
+				break; // invalid payload CRC
+			}
+		} else
+			assert(false); // unreachable
+	}
 	log.header.eoffset = log.roffset;
 
 	// leave read mode
@@ -281,6 +303,12 @@ int lread_record(struct Log *log, struct RecordHeader *rheader, char *buf)
 		return -1;
 	}
 
+	// Return the first chunk of the payload without computing CRC.
+	if (rheader->plen > MAX_PAYLOAD) {
+		lread(log, buf, MAX_PAYLOAD);
+		return -2;
+	}
+
 	lread(log, buf, rheader->plen);
 	int pcrc = crc32c(buf, rheader->plen);
 	if (rheader->pcrc != pcrc) {
@@ -381,13 +409,18 @@ const char* readu64le(const char *buf, uint64_t *i)
 	return buf + sizeof(uint64_t);
 }
 
+#define CRC32C_INIT 0xffffffffu
+
 uint32_t crc32c(const char *buf, int count)
 {
 	assert(count > 0);
+	return crc32c_ext(CRC32C_INIT, buf, count);
+}
 
+uint32_t crc32c_ext(uint32_t crc, const char *buf, int count)
+{
 	unsigned char *ptr = (unsigned char*)buf;
 	const unsigned char *eptr = ptr + count;
-	uint32_t crc = 0xffffffffu;
 
 	// process data in growing chunks until 8 byte alignment boundary
 	if (ptr + 1 <= eptr && (uintptr_t)ptr & 0x01) {

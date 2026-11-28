@@ -21,5 +21,6 @@ char* writeu32le(char *buf, uint32_t val);
 char* writeu64le(char *buf, uint64_t val);
 
 uint32_t crc32c(const char *buf, int count);
+uint32_t crc32c_ext(uint32_t crc, const char *buf, int count);
 
 #endif

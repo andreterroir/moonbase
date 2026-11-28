@@ -89,13 +89,20 @@ struct Header {
 struct RecordHeader {
    /* 0: */		uint32_t iseq;	// incarnation sequence number
    /* 4: */		uint32_t irnd;	// random incarnation salt
-   /* 8: */		uint32_t plen;	// payload length
+   /* 8: */		uint32_t plen;	// payload length up to 4Gib
    /* 12: */	uint32_t hcrc;	// header CRC
    /* 16: */	uint32_t pcrc;	// payload CRC
    /* 20:		plen bytes */
 };
 
 #define RHEADER_SIZE sizeof(struct RecordHeader)
+
+// Maximum payload size that can be read as a record in one lread_record call.
+// Applications that make use of larger payloads are required to read the rest
+// of the payload separately via one or more lread call and are responsible for
+// CRC verification. The length of the payload that can be stored is limited by
+// the size of RecordHeader.plen.
+#define MAX_PAYLOAD 65536 // 64KiB
 
 /*
    The header CRC checksum allows to detect when a record header was written
